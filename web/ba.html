@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>建筑设备监控（BA）— IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-0:#bcd9fb;
+    --bg-1:#d8eaff;
+    --cyan:#0a93c9;
+    --blue:#2b7fff;
+    --magenta:#e23a82;
+    --violet:#8a4fd6;
+    --orange:#ef8326;
+    --red:#e24550;
+    --green:#1fa85f;
+    --txt:#123c6e;
+    --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:#cfe4ff; overflow:hidden; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+
+  /* ---- stage scaling ---- */
+  #stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1300px 760px at 50% -12%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    overflow:hidden;
+  }
+  #stage{
+    width:1920px; height:1080px; position:relative;
+    transform-origin:center center;
+    background:
+      radial-gradient(1500px 880px at 50% 4%, #eaf4ff 0%, transparent 56%),
+      linear-gradient(180deg,#9ec6f2 0%,#bcd9fb 48%,#d8eaff 100%);
+  }
+  #root{ width:1920px; height:1080px; }
+
+  /* ---- glass card ---- */
+  .glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(220,238,255,.08));
+    border:1px solid rgba(120,170,230,.32);
+    border-radius:8px;
+    box-shadow:0 6px 26px rgba(60,110,180,0.1), inset 0 1px 0 rgba(255,255,255,.5);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  }
+  .glass::before,.glass::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color:var(--cyan); opacity:.85;
+  }
+  .glass::before{ left:-1px; top:-1px; border-left:2px solid; border-top:2px solid; border-top-left-radius:8px; }
+  .glass::after{ right:-1px; bottom:-1px; border-right:2px solid; border-bottom:2px solid; border-bottom-right-radius:8px; }
+
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 14px 8px; position:relative;
+  }
+  .card-title .dot{ width:7px; height:7px; transform:rotate(45deg); background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .card-title h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:1px; color:#0e3a72; }
+  .card-title::after{
+    content:""; position:absolute; left:14px; right:14px; bottom:0; height:1px;
+    background:linear-gradient(90deg, var(--cyan), rgba(43,127,255,0) 70%);
+  }
+  .title-en{ font-size:10px; color:var(--txt-dim); letter-spacing:2px; text-transform:uppercase; font-family:'Oxanium'; }
+
+  .glow-text{ text-shadow:0 1px 1px rgba(255,255,255,.55); }
+  .scrollbar::-webkit-scrollbar{ width:6px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.35); border-radius:3px; }
+  .scrollbar::-webkit-scrollbar-track{ background:transparent; }
+
+  @keyframes blink{ 0%,100%{ opacity:1;} 50%{ opacity:.25;} }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+
+  .recharts-default-tooltip{ background:rgba(255,255,255,.95)!important; border:1px solid var(--line)!important; border-radius:6px!important; }
+  .recharts-tooltip-label,.recharts-tooltip-item{ color:#123c6e!important; }
+
+  /* ---- BA 页面专用 ---- */
+  /* 设备卡片 hover / 选中态 */
+  .dev-card{ cursor:pointer; transition:box-shadow .2s ease, border-color .2s ease, transform .15s ease; }
+  .dev-card:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(60,110,180,.18), inset 0 1px 0 rgba(255,255,255,.5); }
+  .dev-card.sel{ border-color:var(--cyan); box-shadow:0 0 0 1px var(--cyan), 0 8px 24px rgba(10,147,201,.22); }
+
+  /* 控制按钮 */
+  .ctl-btn{
+    border:1px solid rgba(120,170,230,.45); border-radius:6px;
+    background:linear-gradient(160deg, rgba(255,255,255,.4), rgba(220,238,255,.15));
+    color:var(--txt); font-size:13px; font-weight:700; letter-spacing:1px;
+    padding:7px 0; cursor:pointer; transition:all .15s ease;
+  }
+  .ctl-btn:hover{ border-color:var(--cyan); box-shadow:0 0 10px rgba(10,147,201,.35); }
+  .ctl-btn:active{ transform:scale(.97); }
+  .ctl-btn:disabled{ opacity:.4; cursor:not-allowed; box-shadow:none; }
+
+  /* 阀门滑条 */
+  input[type=range].valve{
+    -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px;
+    background:linear-gradient(90deg, var(--cyan) var(--p,50%), rgba(20,60,110,.12) var(--p,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range].valve::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; border-radius:50%;
+    background:#fff; border:2px solid var(--cyan); box-shadow:0 0 8px var(--cyan); cursor:pointer;
+  }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage"><div id="root"></div></div>
+  </div>
+
+  <script>
+    // 静默 recharts 2.x 已知无害的 defaultProps 弃用告警
+    (function(){
+      var _err = console.error;
+      console.error = function(){
+        var m = arguments[0];
+        if (typeof m === 'string' && m.indexOf('defaultProps') !== -1) return;
+        return _err.apply(console, arguments);
+      };
+    })();
+    // ---- 1920x1080 舞台等比缩放 ----
+    function fitStage(){
+      var s = document.getElementById('stage');
+      var scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitStage);
+    fitStage();
+  </script>
+
+  <script type="text/babel">
+/* ============================================================
+   IBMS 子屏 — 建筑设备监控（BA）
+   设备类型：新风机组 fresh / 空调机组 ac / 冷热源 chiller
+   ============================================================ */
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+const { BarChart, Bar: RBar, XAxis, YAxis, Tooltip, Cell } = Recharts;
+
+/* ---------- 工具 ---------- */
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+/* 写操作统一 POST（相对路径，不带开头斜杠） */
+function postJSON(url, body){
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+}
+
+/* ---------- 设备类型定义 ---------- */
+const TYPES = [
+  { key: 'fresh',   label: '新风机组', en: 'FRESH AIR UNIT' },
+  { key: 'ac',      label: '空调机组', en: 'AIR HANDLING UNIT' },
+  { key: 'chiller', label: '冷热源',   en: 'CHILLER PLANT' },
+];
+
+/* 各类型运行参数的展示定义：[字段, 中文名, 单位] */
+const PARAM_DEFS = {
+  fresh: [
+    ['supplyTemp', '送风温度', '℃'], ['returnTemp', '回风温度', '℃'],
+    ['humidity', '回风湿度', '%'],   ['valve', '水阀开度', '%'],
+    ['fanFreq', '风机频率', 'Hz'],   ['power', '运行功率', 'kW'],
+    ['setTemp', '设定温度', '℃'],
+  ],
+  ac: [
+    ['supplyTemp', '送风温度', '℃'], ['returnTemp', '回风温度', '℃'],
+    ['humidity', '回风湿度', '%'],   ['valve', '水阀开度', '%'],
+    ['fanFreq', '风机频率', 'Hz'],   ['power', '运行功率', 'kW'],
+    ['setTemp', '设定温度', '℃'],
+  ],
+  chiller: [
+    ['supplyTemp', '出水温度', '℃'], ['returnTemp', '回水温度', '℃'],
+    ['humidity', '机房湿度', '%'],   ['valve', '阀门开度', '%'],
+    ['fanFreq', '压缩机频率', 'Hz'], ['power', '运行功率', 'kW'],
+    ['setTemp', '设定温度', '℃'],
+  ],
+};
+
+/* 状态徽标配色：运行 / 停止 / 故障 */
+const STATUS_COLOR = { '运行': 'var(--green)', '停止': 'var(--txt-dim)', '故障': 'var(--red)' };
+
+/* ---------- 初始 Mock 数据（与 GET api/v1/ba/devices 返回同构，fetch 失败时兜底） ---------- */
+function mockData(type){
+  const mk = (id, name, zone, online, status, mode, params) => ({ id, name, type, zone, online, status, mode, params });
+  if (type === 'ac') {
+    const devices = [
+      mk('AC-A-01', '空调机组 AC-A-01', 'A 栋 1F', true,  '运行', '自动', { supplyTemp: 17.8, returnTemp: 24.6, humidity: 52, valve: 68, fanFreq: 41.2, power: 18.6, setTemp: 24.0 }),
+      mk('AC-A-02', '空调机组 AC-A-02', 'A 栋 5F', true,  '运行', '自动', { supplyTemp: 18.2, returnTemp: 25.1, humidity: 50, valve: 55, fanFreq: 38.0, power: 15.3, setTemp: 24.5 }),
+      mk('AC-B-01', '空调机组 AC-B-01', 'B 栋 2F', true,  '运行', '手动', { supplyTemp: 19.0, returnTemp: 23.8, humidity: 58, valve: 47, fanFreq: 35.5, power: 13.8, setTemp: 25.0 }),
+      mk('AC-B-02', '空调机组 AC-B-02', 'B 栋 6F', true,  '停止', '手动', { supplyTemp: 26.0, returnTemp: 26.4, humidity: 60, valve: 0,  fanFreq: 0,    power: 0,    setTemp: 25.0 }),
+      mk('AC-C-01', '空调机组 AC-C-01', 'C 栋 3F', true,  '运行', '自动', { supplyTemp: 18.6, returnTemp: 24.2, humidity: 54, valve: 60, fanFreq: 40.0, power: 16.7, setTemp: 24.0 }),
+      mk('AC-C-02', '空调机组 AC-C-02', 'C 栋 8F', false, '故障', '自动', { supplyTemp: 0,    returnTemp: 0,    humidity: 0,  valve: 0,  fanFreq: 0,    power: 0,    setTemp: 24.0 }),
+    ];
+    return {
+      stats: { total: 6, online: 5, running: 4, stopped: 1, fault: 1 },
+      zones: [ { name: 'A 栋', count: 2 }, { name: 'B 栋', count: 2 }, { name: 'C 栋', count: 2 } ],
+      devices,
+    };
+  }
+  if (type === 'chiller') {
+    const devices = [
+      mk('CH-01', '离心式冷水机组 CH-01', '地下室 B2 冷冻机房', true,  '运行', '自动', { supplyTemp: 7.2,  returnTemp: 12.4, humidity: 62, valve: 85, fanFreq: 46.5, power: 286.4, setTemp: 7.0 }),
+      mk('CH-02', '离心式冷水机组 CH-02', '地下室 B2 冷冻机房', true,  '运行', '自动', { supplyTemp: 7.5,  returnTemp: 12.8, humidity: 62, valve: 78, fanFreq: 43.2, power: 262.0, setTemp: 7.0 }),
+      mk('CH-03', '螺杆式冷水机组 CH-03', '地下室 B2 冷冻机房', true,  '停止', '手动', { supplyTemp: 16.0, returnTemp: 16.2, humidity: 62, valve: 0,  fanFreq: 0,    power: 0,     setTemp: 7.0 }),
+      mk('CH-04', '燃气热水锅炉 CH-04',   '地下室 B1 锅炉房',   true,  '停止', '自动', { supplyTemp: 28.0, returnTemp: 27.6, humidity: 58, valve: 0,  fanFreq: 0,    power: 0,     setTemp: 45.0 }),
+      mk('CH-05', '冷却塔风机组 CH-05',   '屋顶 冷却塔区',     true,  '运行', '自动', { supplyTemp: 30.2, returnTemp: 35.4, humidity: 70, valve: 90, fanFreq: 38.0, power: 22.5,  setTemp: 32.0 }),
+      mk('CH-06', '冷冻水循环泵 CH-06',   '地下室 B2 冷冻机房', false, '故障', '自动', { supplyTemp: 0,    returnTemp: 0,    humidity: 0,  valve: 0,  fanFreq: 0,    power: 0,     setTemp: 7.0 }),
+    ];
+    return {
+      stats: { total: 6, online: 5, running: 3, stopped: 2, fault: 1 },
+      zones: [ { name: '地下室', count: 4 }, { name: '屋顶', count: 1 }, { name: '锅炉房', count: 1 } ],
+      devices,
+    };
+  }
+  // 默认 fresh：新风机组 7 台
+  const devices = [
+    mk('AHU-A-01', '新风机组 AHU-A-01', 'A 栋 3F',  true,  '运行', '自动', { supplyTemp: 18.5, returnTemp: 23.2, humidity: 55, valve: 62, fanFreq: 38.6, power: 12.4, setTemp: 24.0 }),
+    mk('AHU-A-02', '新风机组 AHU-A-02', 'A 栋 8F',  true,  '运行', '自动', { supplyTemp: 18.9, returnTemp: 23.8, humidity: 53, valve: 58, fanFreq: 36.2, power: 11.6, setTemp: 24.0 }),
+    mk('AHU-A-03', '新风机组 AHU-A-03', 'A 栋 12F', true,  '运行', '手动', { supplyTemp: 19.4, returnTemp: 24.5, humidity: 51, valve: 45, fanFreq: 32.0, power: 9.8,  setTemp: 24.5 }),
+    mk('AHU-B-01', '新风机组 AHU-B-01', 'B 栋 2F',  true,  '运行', '自动', { supplyTemp: 18.2, returnTemp: 23.0, humidity: 57, valve: 66, fanFreq: 40.5, power: 13.1, setTemp: 23.5 }),
+    mk('AHU-B-02', '新风机组 AHU-B-02', 'B 栋 7F',  true,  '停止', '手动', { supplyTemp: 25.8, returnTemp: 26.0, humidity: 60, valve: 0,  fanFreq: 0,    power: 0,    setTemp: 24.0 }),
+    mk('AHU-G-01', '新风机组 AHU-G-01', '地下室 B1', true,  '运行', '自动', { supplyTemp: 17.6, returnTemp: 22.4, humidity: 64, valve: 72, fanFreq: 42.8, power: 14.2, setTemp: 23.0 }),
+    mk('AHU-G-02', '新风机组 AHU-G-02', '地下室 B2', false, '故障', '自动', { supplyTemp: 0,    returnTemp: 0,    humidity: 0,  valve: 0,  fanFreq: 0,    power: 0,    setTemp: 24.0 }),
+  ];
+  return {
+    stats: { total: 7, online: 6, running: 5, stopped: 1, fault: 1 },
+    zones: [ { name: 'A 栋', count: 3 }, { name: 'B 栋', count: 2 }, { name: '地下室', count: 2 } ],
+    devices,
+  };
+}
+
+/* 初始 Mock 事件（与 GET api/v1/ba/events 返回同构） */
+function mockEvents(type){
+  const dev = type === 'ac' ? ['AC-A-01', 'AC-B-01', 'AC-C-02']
+            : type === 'chiller' ? ['CH-01', 'CH-02', 'CH-06']
+            : ['AHU-A-01', 'AHU-B-01', 'AHU-G-02'];
+  return [
+    { time: '14:32:10', device: dev[0], event: '启动',            by: '自动策略', result: '成功' },
+    { time: '14:05:46', device: dev[1], event: '设定温度 24.0℃',  by: '管理员',   result: '成功' },
+    { time: '13:48:22', device: dev[2], event: '通讯故障告警',     by: '系统巡检', result: '失败' },
+    { time: '13:30:00', device: dev[0], event: '切换至自动模式',   by: '管理员',   result: '成功' },
+    { time: '12:55:18', device: dev[1], event: '阀门开度 62%',     by: '自动策略', result: '成功' },
+    { time: '11:40:07', device: dev[0], event: '停止',            by: '管理员',   result: '成功' },
+    { time: '09:00:00', device: dev[1], event: '启动',            by: '定时计划', result: '成功' },
+    { time: '08:30:00', device: dev[0], event: '启动',            by: '定时计划', result: '成功' },
+  ];
+}
+
+/* ============================================================
+   基础组件（与主屏同风格）
+   ============================================================ */
+
+/* ---------- 自测量容器（替代 ResponsiveContainer，避免 transform:scale 下 ResizeObserver 不触发） ---------- */
+function AutoBox({ children }){
+  const ref = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+      setSize((p) => (p.w === w && p.h === h) ? p : { w, h });
+    };
+    measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 60);
+    return () => { ro && ro.disconnect(); window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {size.w > 0 && size.h > 0 ? children(size.w, size.h) : null}
+    </div>
+  );
+}
+
+/* ---------- 玻璃卡片外壳 ---------- */
+function GlowCard({ title, en, extra, children, className, bodyClass }){
+  return (
+    <div className={"glass flex flex-col " + (className || "")}>
+      <div className="card-title">
+        <span className="dot"></span>
+        <h3>{title}</h3>
+        {en ? <span className="title-en">{en}</span> : null}
+        <div className="ml-auto">{extra}</div>
+      </div>
+      <div className={"flex-1 min-h-0 px-3.5 pb-3 pt-2 " + (bodyClass || "")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 大号圆环仪表（设备在线率） ---------- */
+function BigRing({ value, label, sub, color }){
+  const r = 46, c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, value / 100));
+  const dash = c * pct;
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <div className="relative" style={{ width: 124, height: 124 }}>
+        <svg width="124" height="124" viewBox="0 0 124 124" className="-rotate-90">
+          <circle cx="62" cy="62" r={r} fill="none" stroke="rgba(20,60,110,.12)" strokeWidth="9" />
+          <circle cx="62" cy="62" r={r} fill="none" stroke={color} strokeWidth="9"
+            strokeLinecap="round" strokeDasharray={dash + ' ' + c}
+            style={{ filter: 'drop-shadow(0 0 6px ' + color + ')', transition: 'stroke-dasharray .8s ease' }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="num text-[28px] font-bold leading-none glow-text" style={{ color }}>
+            {value}<span className="text-[14px]">%</span>
+          </div>
+          <div className="text-[10px] num mt-1" style={{ color: 'var(--txt-dim)' }}>{sub}</div>
+        </div>
+      </div>
+      <div className="text-[13px] mt-1.5" style={{ color: 'var(--txt)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ---------- 数值统计块 ---------- */
+function StatBlock({ value, label, color, unit }){
+  return (
+    <div className="flex flex-col items-center justify-center flex-1 py-1">
+      <div className="num text-[26px] font-bold leading-none glow-text" style={{ color: color || 'var(--cyan)' }}>
+        {value}{unit ? <span className="text-[13px] ml-0.5 font-medium">{unit}</span> : null}
+      </div>
+      <div className="text-[12px] mt-1.5" style={{ color: 'var(--txt-dim)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ---------- 状态徽标 ---------- */
+function StatusBadge({ status }){
+  const col = STATUS_COLOR[status] || 'var(--txt-dim)';
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold"
+      style={{ color: col, background: col.replace(')', ',.0)').replace('var(--', 'var(--'), border: '1px solid ' + col, boxShadow: status === '故障' ? '0 0 8px ' + col : 'none' }}>
+      <span className={"w-1.5 h-1.5 rounded-full " + (status === '运行' ? 'blink' : '')} style={{ background: col }}></span>
+      {status}
+    </span>
+  );
+}
+
+/* ============================================================
+   页面顶部：TopBar（返回链接 + 标题 + 实时时钟）
+   ============================================================ */
+function TopBar(){
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);  // 每秒更新时钟
+    return () => clearInterval(t);
+  }, []);
+  const week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+  return (
+    <div className="relative flex items-center justify-center" style={{ height: 72 }}>
+      {/* 左侧：返回综合态势 */}
+      <a href="./" className="absolute left-6 flex items-center gap-1.5 text-[14px] font-bold no-underline px-3 py-1.5 rounded glass"
+        style={{ color: 'var(--cyan)', letterSpacing: 1 }}>
+        ⟵ 综合态势
+      </a>
+      {/* 中央：页面标题 */}
+      <div className="text-center">
+        <div className="glow-text" style={{ fontSize: 30, fontWeight: 900, letterSpacing: 8, color: '#0e3a72' }}>
+          建筑设备监控
+        </div>
+        <div className="title-en" style={{ letterSpacing: 5, marginTop: 2 }}>BUILDING AUTOMATION SYSTEM</div>
+      </div>
+      {/* 右侧：实时时间 */}
+      <div className="absolute right-6 text-right">
+        <div className="num text-[24px] font-bold leading-none glow-text" style={{ color: 'var(--cyan)' }}>
+          {pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}
+        </div>
+        <div className="text-[12px] num mt-1" style={{ color: 'var(--txt-dim)' }}>
+          {now.getFullYear()}-{pad(now.getMonth() + 1)}-{pad(now.getDate())} 星期{week}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   设备类型 Tab + 群控按钮行
+   ============================================================ */
+function TypeTabs({ tab, onChange, onControlAll }){
+  return (
+    <div className="flex items-center px-6" style={{ height: 48 }}>
+      <div className="flex gap-2.5">
+        {TYPES.map((t) => {
+          const active = t.key === tab;
+          return (
+            <div key={t.key} onClick={() => onChange(t.key)}
+              className="glass px-6 py-1.5 cursor-pointer select-none text-center"
+              style={active
+                ? { borderColor: 'var(--cyan)', boxShadow: '0 0 0 1px var(--cyan), 0 0 14px rgba(10,147,201,.35)' }
+                : { opacity: .75 }}>
+              <div className="text-[15px] font-bold" style={{ color: active ? 'var(--cyan)' : 'var(--txt)', letterSpacing: 2 }}>{t.label}</div>
+              <div className="title-en" style={{ letterSpacing: 1 }}>{t.en}</div>
+            </div>
+          );
+        })}
+      </div>
+      {/* 右侧：当前类型群控 */}
+      <div className="ml-auto flex items-center gap-2.5">
+        <span className="text-[12px]" style={{ color: 'var(--txt-dim)' }}>群控（当前类型全部设备）</span>
+        <button className="ctl-btn px-5" style={{ color: 'var(--green)', borderColor: 'var(--green)' }}
+          onClick={() => onControlAll('start')}>一键启动</button>
+        <button className="ctl-btn px-5" style={{ color: 'var(--orange)', borderColor: 'var(--orange)' }}
+          onClick={() => onControlAll('stop')}>一键停止</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   左侧：统计面板（在线率环形 + 状态统计 + 区域分布条形图）
+   ============================================================ */
+function StatsPanel({ stats, zones }){
+  const onlineRate = stats.total ? Math.round((stats.online / stats.total) * 1000) / 10 : 0;
+  const runRate = stats.total ? Math.round((stats.running / stats.total) * 1000) / 10 : 0;
+  const zoneColors = ['var(--blue)', 'var(--cyan)', 'var(--violet)', 'var(--orange)', 'var(--magenta)'];
+  return (
+    <div className="flex flex-col gap-3.5 h-full" style={{ width: 420 }}>
+      {/* 在线/运行统计 */}
+      <GlowCard title="设备运行统计" en="DEVICE STATS" className="shrink-0">
+        <div className="flex items-center justify-around pt-1 pb-2">
+          <BigRing value={onlineRate} label="设备在线率" sub={stats.online + ' / ' + stats.total} color="var(--cyan)" />
+          <BigRing value={runRate} label="设备运行率" sub={stats.running + ' / ' + stats.total} color="var(--green)" />
+        </div>
+        <div className="flex border-t pt-2" style={{ borderColor: 'rgba(120,170,230,.25)' }}>
+          <StatBlock value={stats.total} label="设备总数" color="var(--blue)" unit="台" />
+          <StatBlock value={stats.running} label="运行中" color="var(--green)" unit="台" />
+          <StatBlock value={stats.stopped} label="已停止" color="var(--txt-dim)" unit="台" />
+          <StatBlock value={stats.fault} label="故障" color="var(--red)" unit="台" />
+        </div>
+      </GlowCard>
+      {/* 区域分布 */}
+      <GlowCard title="区域设备分布" en="ZONE DISTRIBUTION" className="flex-1 min-h-0">
+        <AutoBox>
+          {(w, h) => (
+            <BarChart width={w} height={h} data={zones} layout="vertical" margin={{ top: 4, right: 28, left: 4, bottom: 0 }}>
+              <XAxis type="number" allowDecimals={false} tick={{ fill: 'var(--txt-dim)', fontSize: 11, fontFamily: 'Oxanium' }}
+                axisLine={{ stroke: 'rgba(20,60,110,.18)' }} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={64} tick={{ fill: 'var(--txt)', fontSize: 12 }}
+                axisLine={{ stroke: 'rgba(20,60,110,.18)' }} tickLine={false} />
+              <Tooltip cursor={{ fill: 'rgba(43,127,255,.08)' }} formatter={(v) => [v + ' 台', '设备数']} />
+              <RBar dataKey="count" barSize={18} radius={[0, 4, 4, 0]} label={{ position: 'right', fill: 'var(--txt)', fontSize: 12, fontFamily: 'Oxanium' }}>
+                {zones.map((z, i) => <Cell key={i} fill={zoneColors[i % zoneColors.length]} />)}
+              </RBar>
+            </BarChart>
+          )}
+        </AutoBox>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   中间：设备卡片网格
+   ============================================================ */
+function DeviceCard({ dev, selected, onClick }){
+  const defs = PARAM_DEFS[dev.type] || PARAM_DEFS.fresh;
+  // 卡片上只展示 3 个关键参数：送风/出水温度、阀门、功率
+  const keyParams = [defs[0], defs[3], defs[5]];
+  return (
+    <div className={"glass dev-card p-3 " + (selected ? 'sel' : '')} onClick={onClick}>
+      <div className="flex items-center gap-2">
+        <span className="text-[14px] font-bold truncate" style={{ color: '#0e3a72' }}>{dev.name}</span>
+        <span className="ml-auto shrink-0"><StatusBadge status={dev.status} /></span>
+      </div>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>📍 {dev.zone}</span>
+        <span className="text-[11px] px-1.5 rounded" style={{
+          color: dev.mode === '自动' ? 'var(--blue)' : 'var(--violet)',
+          border: '1px solid ' + (dev.mode === '自动' ? 'var(--blue)' : 'var(--violet)'),
+        }}>{dev.mode}</span>
+        <span className="ml-auto text-[11px] num" style={{ color: dev.online ? 'var(--green)' : 'var(--red)' }}>
+          {dev.online ? '● 在线' : '○ 离线'}
+        </span>
+      </div>
+      <div className="flex mt-2.5 pt-2 border-t" style={{ borderColor: 'rgba(120,170,230,.25)' }}>
+        {keyParams.map(([k, label, unit]) => (
+          <div key={k} className="flex-1 text-center">
+            <div className="num text-[17px] font-bold leading-none" style={{ color: 'var(--cyan)' }}>
+              {dev.params[k]}<span className="text-[10px] ml-0.5" style={{ color: 'var(--txt-dim)' }}>{unit}</span>
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: 'var(--txt-dim)' }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DeviceGrid({ devices, selId, onSelect }){
+  return (
+    <GlowCard title="设备列表" en="DEVICE LIST" className="flex-1 min-w-0 h-full"
+      extra={<span className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>共 {devices.length} 台</span>}>
+      <div className="grid grid-cols-3 gap-3 overflow-y-auto scrollbar pr-1" style={{ maxHeight: '100%' }}>
+        {devices.map((d) => (
+          <DeviceCard key={d.id} dev={d} selected={d.id === selId} onClick={() => onSelect(d.id)} />
+        ))}
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ============================================================
+   右侧：设备详情 + 控制面板
+   ============================================================ */
+function DetailPanel({ dev, onControl }){
+  // 阀门开度滑条本地状态：拖动中不被轮询覆盖，松手时提交
+  const [valve, setValve] = useState(dev ? dev.params.valve : 0);
+  const dragging = useRef(false);
+  useEffect(() => {
+    if (dev && !dragging.current) setValve(dev.params.valve);
+  }, [dev && dev.id, dev && dev.params.valve]);
+
+  if (!dev) {
+    return (
+      <GlowCard title="设备详情 · 控制" en="DETAIL & CONTROL" className="flex-1 min-h-0">
+        <div className="h-full flex items-center justify-center text-[13px]" style={{ color: 'var(--txt-dim)' }}>
+          点击左侧设备卡片查看详情
+        </div>
+      </GlowCard>
+    );
+  }
+
+  const defs = PARAM_DEFS[dev.type] || PARAM_DEFS.fresh;
+  const ctlDisabled = !dev.online;   // 离线设备禁用控制
+  const setTemp = dev.params.setTemp;
+
+  /* 温度设定 +/-（步进 0.5℃，限定 5~45℃ 覆盖冷热源场景） */
+  const adjTemp = (d) => {
+    const v = Math.round(Math.min(45, Math.max(5, setTemp + d)) * 10) / 10;
+    onControl(dev.id, 'setTemp', v);
+  };
+  /* 阀门滑条松手提交 */
+  const commitValve = () => { dragging.current = false; onControl(dev.id, 'setValve', valve); };
+
+  return (
+    <GlowCard title="设备详情 · 控制" en="DETAIL & CONTROL" className="flex-1 min-h-0" bodyClass="overflow-y-auto scrollbar">
+      {/* 设备基本信息 */}
+      <div className="flex items-center gap-2">
+        <span className="text-[16px] font-bold" style={{ color: '#0e3a72' }}>{dev.name}</span>
+        <StatusBadge status={dev.status} />
+      </div>
+      <div className="flex items-center gap-3 mt-1 text-[12px]" style={{ color: 'var(--txt-dim)' }}>
+        <span className="num">{dev.id}</span>
+        <span>📍 {dev.zone}</span>
+        <span style={{ color: dev.online ? 'var(--green)' : 'var(--red)' }}>{dev.online ? '● 在线' : '○ 离线'}</span>
+      </div>
+
+      {/* 运行参数列表 */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-3 pt-2.5 border-t" style={{ borderColor: 'rgba(120,170,230,.25)' }}>
+        {defs.map(([k, label, unit]) => (
+          <div key={k} className="flex items-baseline justify-between py-0.5 border-b border-dashed" style={{ borderColor: 'rgba(120,170,230,.2)' }}>
+            <span className="text-[12px]" style={{ color: 'var(--txt-dim)' }}>{label}</span>
+            <span className="num text-[15px] font-bold" style={{ color: k === 'setTemp' ? 'var(--orange)' : 'var(--cyan)' }}>
+              {dev.params[k]}<span className="text-[10px] ml-0.5 font-normal" style={{ color: 'var(--txt-dim)' }}>{unit}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ---- 控制区 ---- */}
+      <div className="mt-3.5">
+        <div className="text-[12px] font-bold mb-1.5" style={{ color: 'var(--txt)', letterSpacing: 2 }}>
+          ⚙ 设备控制 <span className="title-en">CONTROL</span>
+        </div>
+
+        {/* 手 / 自动切换 */}
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <span className="text-[12px] w-[64px] shrink-0" style={{ color: 'var(--txt-dim)' }}>运行模式</span>
+          {['自动', '手动'].map((m) => (
+            <button key={m} className="ctl-btn flex-1" disabled={ctlDisabled}
+              style={dev.mode === m ? { color: 'var(--cyan)', borderColor: 'var(--cyan)', boxShadow: '0 0 10px rgba(10,147,201,.35)' } : {}}
+              onClick={() => dev.mode !== m && onControl(dev.id, 'mode', m)}>{m}</button>
+          ))}
+        </div>
+
+        {/* 启 / 停 */}
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <span className="text-[12px] w-[64px] shrink-0" style={{ color: 'var(--txt-dim)' }}>启停控制</span>
+          <button className="ctl-btn flex-1" disabled={ctlDisabled || dev.status === '运行'}
+            style={{ color: 'var(--green)', borderColor: 'var(--green)' }}
+            onClick={() => onControl(dev.id, 'start')}>▶ 启动</button>
+          <button className="ctl-btn flex-1" disabled={ctlDisabled || dev.status === '停止'}
+            style={{ color: 'var(--orange)', borderColor: 'var(--orange)' }}
+            onClick={() => onControl(dev.id, 'stop')}>■ 停止</button>
+        </div>
+
+        {/* 温度设定 +/- */}
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <span className="text-[12px] w-[64px] shrink-0" style={{ color: 'var(--txt-dim)' }}>温度设定</span>
+          <button className="ctl-btn w-10" disabled={ctlDisabled} onClick={() => adjTemp(-0.5)}>−</button>
+          <div className="flex-1 text-center num text-[20px] font-bold glow-text" style={{ color: 'var(--orange)' }}>
+            {setTemp.toFixed(1)}<span className="text-[12px] ml-0.5" style={{ color: 'var(--txt-dim)' }}>℃</span>
+          </div>
+          <button className="ctl-btn w-10" disabled={ctlDisabled} onClick={() => adjTemp(0.5)}>＋</button>
+        </div>
+
+        {/* 阀门开度滑条 */}
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] w-[64px] shrink-0" style={{ color: 'var(--txt-dim)' }}>阀门开度</span>
+          <input type="range" className="valve flex-1" min="0" max="100" step="1" value={valve}
+            disabled={ctlDisabled}
+            style={{ '--p': valve + '%' }}
+            onChange={(e) => { dragging.current = true; setValve(Number(e.target.value)); }}
+            onMouseUp={commitValve} onTouchEnd={commitValve} />
+          <span className="num text-[16px] font-bold w-[48px] text-right" style={{ color: 'var(--cyan)' }}>{valve}%</span>
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ============================================================
+   右下：运行事件记录
+   ============================================================ */
+function EventsPanel({ events }){
+  return (
+    <GlowCard title="运行事件记录" en="EVENT LOG" className="shrink-0" bodyClass="overflow-hidden"
+      style={{ height: 312 }}>
+      <div className="h-full overflow-y-auto scrollbar pr-1">
+        {events.map((e, i) => (
+          <div key={i} className="flex items-center gap-2.5 py-[7px] border-b border-dashed text-[12px]"
+            style={{ borderColor: 'rgba(120,170,230,.22)' }}>
+            <span className="num shrink-0 w-[58px]" style={{ color: 'var(--txt-dim)' }}>{e.time}</span>
+            <span className="num shrink-0 w-[78px] font-bold" style={{ color: 'var(--blue)' }}>{e.device}</span>
+            <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--txt)' }}>{e.event}</span>
+            <span className="shrink-0" style={{ color: 'var(--txt-dim)' }}>{e.by}</span>
+            <span className="shrink-0 font-bold" style={{ color: e.result === '成功' ? 'var(--green)' : 'var(--red)' }}>{e.result}</span>
+          </div>
+        ))}
+        {events.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-[12px]" style={{ color: 'var(--txt-dim)' }}>暂无事件</div>
+        ) : null}
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ============================================================
+   页面根组件
+   ============================================================ */
+function App(){
+  const [tab, setTab] = useState('fresh');                       // 当前设备类型 Tab
+  const [data, setData] = useState(() => mockData('fresh'));     // 设备数据（mock 兜底）
+  const [events, setEvents] = useState(() => mockEvents('fresh'));// 事件记录（mock 兜底）
+  const [selId, setSelId] = useState('AHU-A-01');                // 当前选中设备 id
+
+  /* 拉取当前类型的设备数据 + 事件记录（失败静默，保留现有数据） */
+  const refresh = (type) => {
+    fetch('api/v1/ba/devices?type=' + type)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d || !d.devices) return;
+        setData(d);
+        // 若选中设备不在新列表中，回落到第一台
+        setSelId((cur) => d.devices.some((x) => x.id === cur) ? cur : (d.devices[0] ? d.devices[0].id : ''));
+      })
+      .catch(() => {});
+    fetch('api/v1/ba/events?type=' + type)
+      .then((r) => r.json())
+      .then((es) => { if (Array.isArray(es)) setEvents(es); })
+      .catch(() => {});
+  };
+
+  /* Tab 切换：先用 mock 立即渲染，再拉取真实数据；每 5 秒轮询当前 Tab */
+  useEffect(() => {
+    const m = mockData(tab);
+    setData(m);
+    setEvents(mockEvents(tab));
+    setSelId(m.devices[0] ? m.devices[0].id : '');
+    refresh(tab);
+    const t = setInterval(() => refresh(tab), 5000);
+    return () => clearInterval(t);
+  }, [tab]);
+
+  /* 单设备控制：POST api/v1/ba/devices/control，id 放 body，成功后立即刷新 */
+  const handleControl = (id, action, value) => {
+    const body = value !== undefined ? { id, action, value } : { id, action };
+    postJSON('api/v1/ba/devices/control', body)
+      .then(() => refresh(tab))
+      .catch(() => {});
+  };
+
+  /* 群控：POST api/v1/ba/devices/control-all?type=xxx，成功后立即刷新 */
+  const handleControlAll = (action) => {
+    postJSON('api/v1/ba/devices/control-all?type=' + tab, { action })
+      .then(() => refresh(tab))
+      .catch(() => {});
+  };
+
+  const selDev = data.devices.find((d) => d.id === selId) || data.devices[0] || null;
+
+  return (
+    <div className="flex flex-col h-full">
+      <TopBar />
+      <TypeTabs tab={tab} onChange={setTab} onControlAll={handleControlAll} />
+      {/* 主区域：左统计 420 / 中设备网格 / 右详情+事件 460 */}
+      <div className="flex-1 min-h-0 flex gap-3.5 px-6 pt-2.5 pb-5">
+        <StatsPanel stats={data.stats} zones={data.zones} />
+        <DeviceGrid devices={data.devices} selId={selDev ? selDev.id : ''} onSelect={setSelId} />
+        <div className="flex flex-col gap-3.5 h-full" style={{ width: 460 }}>
+          <DetailPanel dev={selDev} onControl={handleControl} />
+          <div style={{ height: 312 }} className="flex flex-col shrink-0">
+            <EventsPanel events={events} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

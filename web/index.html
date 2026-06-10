@@ -1169,6 +1169,31 @@ function TopBar({ d, now, onOpen, alarmCount, msgCount }){
   );
 }
 
+/* ---------------- 模块导航：跳转各子系统大屏 ---------------- */
+const MODULES = [
+  { label: '综合态势', href: './', active: true },
+  { label: 'BA 监控', href: 'ba' },
+  { label: '能源管理', href: 'energy' },
+  { label: '运营管理', href: 'operation' },
+  { label: '工单系统', href: 'workorder' },
+];
+
+function ModuleNav(){
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 glass px-2 py-1"
+      style={{ top: 80, borderRadius: 999 }}>
+      {MODULES.map((m) => m.active ? (
+        <span key={m.label} className="px-3.5 py-1 rounded-full text-[12.5px] font-bold text-white"
+          style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', boxShadow: '0 0 10px rgba(43,127,255,.45)' }}>{m.label}</span>
+      ) : (
+        <a key={m.label} href={m.href}
+          className="px-3.5 py-1 rounded-full text-[12.5px] font-medium transition hover:bg-white/10"
+          style={{ color: 'var(--txt)' }}>{m.label}</a>
+      ))}
+    </div>
+  );
+}
+
 /* ---------------- 主场景：数字孪生楼宇 ---------------- */
 const SCENES = ['全景VR', '二维组态', 'BIM三维', 'GIS地图'];
 
@@ -1257,7 +1282,7 @@ function MainScene({ overview, d, onToggle }){
 }
 
 /* ---------------- 弹窗 ---------------- */
-function Modal({ kind, onClose }){
+function Modal({ kind, onClose, alarms, msgs, onHandle }){
   if (!kind) return null;
   const isAlarm = kind === 'alarm';
   const levelColor = { 紧急: '#e24550', 重要: '#ef8326', 一般: '#d99a16' };
@@ -1282,7 +1307,7 @@ function Modal({ kind, onClose }){
                 </tr>
               </thead>
               <tbody>
-                {ALARM_LIST.map((a) => (
+                {alarms.map((a) => (
                   <tr key={a.id} style={{ background: 'rgba(20,60,110,.05)' }}>
                     <td className="px-3 py-2.5 num rounded-l" style={{ color: 'var(--cyan)' }}>{a.time}</td>
                     <td className="px-3 py-2.5" style={{ color: 'var(--txt)' }}>{a.dev}</td>
@@ -1292,7 +1317,7 @@ function Modal({ kind, onClose }){
                     </td>
                     <td className="px-3 py-2.5 max-w-[220px]" style={{ color: 'var(--txt-dim)' }}>{a.desc}</td>
                     <td className="px-3 py-2.5 rounded-r text-center">
-                      <button className="px-3 py-1 rounded text-[12px] font-medium text-[#04101f]" style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)' }}>处理</button>
+                      <button onClick={() => onHandle(a.id)} className="px-3 py-1 rounded text-[12px] font-medium text-[#04101f]" style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)' }}>处理</button>
                     </td>
                   </tr>
                 ))}
@@ -1300,7 +1325,7 @@ function Modal({ kind, onClose }){
             </table>
           ) : (
             <div className="space-y-2">
-              {MSG_LIST.map((m) => (
+              {msgs.map((m) => (
                 <div key={m.id} className="flex items-center gap-3 px-3 py-3 rounded" style={{ background: 'rgba(20,60,110,.05)' }}>
                   <span className="w-9 h-9 rounded-full flex items-center justify-center text-[13px]" style={{ background: 'rgba(43,127,255,.16)', color: 'var(--cyan)' }}>{m.tag}</span>
                   <div className="flex-1">
@@ -1336,52 +1361,31 @@ function App(){
     return () => clearInterval(t);
   }, []);
 
-  // 实时数据轻微跳动
+  // 轮询后端大屏数据（相对路径，兼容根路径与 /ibms/ 反代两种部署）
   useEffect(() => {
-    const t = setInterval(() => {
-      setD((p) => {
-        const onlineDelta = Math.round((Math.random() - 0.5) * 6);
-        return {
-          ...p,
-          env: {
-            temp: jitter(p.env.temp, 0.8, 18, 30, 1),
-            humidity: jitter(p.env.humidity, 4, 30, 80, 0),
-            pm25: jitter(p.env.pm25, 6, 10, 120, 0),
-            co2: jitter(p.env.co2, 40, 400, 1200, 0),
-          },
-          devices: {
-            online: Math.max(1240, Math.min(1320, p.devices.online + onlineDelta)),
-            offline: jitter(p.devices.offline, 6, 60, 130, 0),
-            fault: jitter(p.devices.fault, 3, 8, 40, 0),
-          },
-          energy: p.energy.map((e) => ({ ...e, v: jitter(e.v, 24, 60, 700, 0) })),
-          parking: (() => {
-            const used = jitter(p.parking.used, 14, 600, p.parking.total, 0);
-            return { ...p.parking, used, free: p.parking.total - used };
-          })(),
-          workorder: {
-            repair: jitter(p.workorder.repair, 2, 30, 60, 0),
-            inspect: jitter(p.workorder.inspect, 2, 50, 90, 0),
-            done: jitter(p.workorder.done, 2, 80, 120, 0),
-            undone: jitter(p.workorder.undone, 2, 5, 30, 0),
-          },
-          room: { ...p.room, temp: jitter(p.room.temp, 0.5, 18, 28, 1), humidity: jitter(p.room.humidity, 3, 35, 60, 0) },
-          broadcast: { ...p.broadcast, playing: jitter(p.broadcast.playing, 2, 0, 12, 0), volume: jitter(p.broadcast.volume, 4, 40, 90, 0) },
-          alarmTrend: p.alarmTrend.map((x) => ({
-            ...x,
-            入侵: jitter(x.入侵, 2, 0, 12, 0),
-            设备: jitter(x.设备, 2, 0, 12, 0),
-          })),
-          securityCat: p.securityCat.map((s) => ({ ...s, v: jitter(s.v, 2, 0, 30, 0) })),
-        };
-      });
-    }, 2200);
+    const load = () => fetch('api/v1/dashboard').then((r) => r.json()).then(setD).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, []);
 
+  // 报警 / 消息列表
+  const [alarms, setAlarms] = useState(ALARM_LIST);
+  const [msgs, setMsgs] = useState(MSG_LIST);
+  useEffect(() => {
+    fetch('api/v1/alarms').then((r) => r.json()).then(setAlarms).catch(() => {});
+    fetch('api/v1/messages').then((r) => r.json()).then(setMsgs).catch(() => {});
+  }, []);
+  const handleAlarm = (id) => {
+    fetch('api/v1/alarms/handle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      .then(() => setAlarms((p) => p.filter((a) => a.id !== id)))
+      .catch(() => {});
+  };
+
   return (
     <div className="w-[1920px] h-[1080px] flex flex-col text-[var(--txt)]">
-      <TopBar d={d} now={now} alarmCount={ALARM_LIST.length} msgCount={MSG_LIST.length} onOpen={setModal} />
+      <TopBar d={d} now={now} alarmCount={alarms.length} msgCount={msgs.length} onOpen={setModal} />
+      <ModuleNav />
 
       <div className="flex-1 min-h-0 grid gap-3.5 px-4 py-3.5"
         style={{ gridTemplateColumns: overview ? '0px minmax(0,1fr) 0px' : '420px minmax(0,1fr) 420px' }}>
@@ -1399,7 +1403,7 @@ function App(){
         </div>
       </div>
 
-      <Modal kind={modal} onClose={() => setModal(null)} />
+      <Modal kind={modal} onClose={() => setModal(null)} alarms={alarms} msgs={msgs} onHandle={handleAlarm} />
     </div>
   );
 }

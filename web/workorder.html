@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>工单系统 — IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-0:#bcd9fb;
+    --bg-1:#d8eaff;
+    --cyan:#0a93c9;
+    --blue:#2b7fff;
+    --magenta:#e23a82;
+    --violet:#8a4fd6;
+    --orange:#ef8326;
+    --red:#e24550;
+    --green:#1fa85f;
+    --txt:#123c6e;
+    --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:#cfe4ff; overflow:hidden; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+
+  /* ---- 1920x1080 缩放舞台 ---- */
+  #stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1300px 760px at 50% -12%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    overflow:hidden;
+  }
+  #stage{
+    width:1920px; height:1080px; position:relative;
+    transform-origin:center center;
+    background:
+      radial-gradient(1500px 880px at 50% 4%, #eaf4ff 0%, transparent 56%),
+      linear-gradient(180deg,#9ec6f2 0%,#bcd9fb 48%,#d8eaff 100%);
+  }
+  #root{ width:1920px; height:1080px; }
+
+  /* ---- 玻璃拟态卡片（带四角高亮） ---- */
+  .glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(220,238,255,.08));
+    border:1px solid rgba(120,170,230,.32);
+    border-radius:8px;
+    box-shadow:0 6px 26px rgba(60,110,180,0.1), inset 0 1px 0 rgba(255,255,255,.5);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  }
+  .glass::before,.glass::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color:var(--cyan); opacity:.85;
+  }
+  .glass::before{ left:-1px; top:-1px; border-left:2px solid; border-top:2px solid; border-top-left-radius:8px; }
+  .glass::after{ right:-1px; bottom:-1px; border-right:2px solid; border-bottom:2px solid; border-bottom-right-radius:8px; }
+
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 14px 8px; position:relative;
+  }
+  .card-title .dot{ width:7px; height:7px; transform:rotate(45deg); background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .card-title h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:1px; color:#0e3a72; }
+  .card-title::after{
+    content:""; position:absolute; left:14px; right:14px; bottom:0; height:1px;
+    background:linear-gradient(90deg, var(--cyan), rgba(43,127,255,0) 70%);
+  }
+  .title-en{ font-size:10px; color:var(--txt-dim); letter-spacing:2px; text-transform:uppercase; font-family:'Oxanium'; }
+
+  .glow-text{ text-shadow:0 1px 1px rgba(255,255,255,.55); }
+  .scrollbar::-webkit-scrollbar{ width:6px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.35); border-radius:3px; }
+  .scrollbar::-webkit-scrollbar-track{ background:transparent; }
+
+  .glitch{ position:relative; color:#0e3a72;
+    text-shadow:0 2px 10px rgba(255,255,255,.7), 1px 0 rgba(43,127,255,.25); }
+
+  @keyframes blink{ 0%,100%{ opacity:1;} 50%{ opacity:.25;} }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+
+  .recharts-default-tooltip{ background:rgba(255,255,255,.95)!important; border:1px solid var(--line)!important; border-radius:6px!important; }
+  .recharts-tooltip-label,.recharts-tooltip-item{ color:#123c6e!important; }
+
+  /* ---- 表单控件（玻璃风输入框 / 下拉 / 文本域） ---- */
+  .ipt{
+    width:100%; padding:9px 12px; font-size:14px; border-radius:6px;
+    color:var(--txt); background:rgba(255,255,255,.42);
+    border:1px solid rgba(43,127,255,.3); outline:none;
+    font-family:'Noto Sans SC',sans-serif; transition:border .2s, box-shadow .2s;
+  }
+  .ipt:focus{ border-color:var(--blue); box-shadow:0 0 0 2px rgba(43,127,255,.18); }
+  .ipt::placeholder{ color:#8aa8c9; }
+  select.ipt option{ color:#123c6e; }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage"><div id="root"></div></div>
+  </div>
+
+  <script>
+    // 静默 recharts 2.x 已知无害的 defaultProps 弃用告警
+    (function(){
+      var _err = console.error;
+      console.error = function(){
+        var m = arguments[0];
+        if (typeof m === 'string' && m.indexOf('defaultProps') !== -1) return;
+        return _err.apply(console, arguments);
+      };
+    })();
+    // ---- 1920x1080 舞台等比缩放 ----
+    function fitStage(){
+      var s = document.getElementById('stage');
+      var scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitStage);
+    fitStage();
+  </script>
+
+  <script type="text/babel">
+/* ============================================================
+   IBMS — 工单系统（工单概览 / 报修中心 / 工单中心）
+   ============================================================ */
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+const {
+  PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area,
+} = Recharts;
+
+const axisStyle = { fontSize: 11, fontFamily: 'Oxanium', fill: '#6f93b8' };
+
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+/* ---------- 状态 / 优先级 / 类型 配色 ---------- */
+const STATUS_COLOR = { '待派单': '#ef8326', '处理中': '#2b7fff', '已完成': '#1fa85f' };
+const PRIORITY_COLOR = { '紧急': '#e24550', '高': '#ef8326', '中': '#2b7fff', '低': '#5b7ea6' };
+const TYPE_COLOR = { '报修': '#2b7fff', '巡检': '#0a93c9', '投诉': '#ef8326', '其他': '#8a4fd6' };
+
+/* ---------- 可选处理人（派单下拉） ---------- */
+const ASSIGNEES = ['维修一组·张伟', '维修一组·李强', '维修二组·王磊', '维修二组·赵峰', '工程部·陈晨', '保洁组·刘芳'];
+
+/* ---------- 初始 mock 兜底数据（形状与 GET api/v1/workorders 完全一致） ---------- */
+function initialData(){
+  return {
+    stats: { total: 107, pending: 9, processing: 16, done: 82, rate: 76.6 },
+    yearTrend: [
+      { month: '1月', count: 86 }, { month: '2月', count: 64 }, { month: '3月', count: 92 },
+      { month: '4月', count: 105 }, { month: '5月', count: 118 }, { month: '6月', count: 107 },
+      { month: '7月', count: 96 }, { month: '8月', count: 88 }, { month: '9月', count: 74 },
+      { month: '10月', count: 81 }, { month: '11月', count: 69 }, { month: '12月', count: 58 },
+    ],
+    byType: [
+      { name: '报修', v: 52 }, { name: '巡检', v: 31 }, { name: '投诉', v: 12 }, { name: '其他', v: 12 },
+    ],
+    list: [
+      { id: 'WO-20260610-012', title: '3F 茶水间水龙头漏水', type: '报修', priority: '紧急', location: 'A栋 3F', creator: '物业前台', assignee: '维修一组·张伟', status: '处理中', createdAt: '2026-06-10 09:42', progress: 60 },
+      { id: 'WO-20260610-011', title: 'B栋大堂闸机刷卡失灵', type: '报修', priority: '高', location: 'B栋 1F', creator: '安保中心', assignee: '', status: '待派单', createdAt: '2026-06-10 09:15', progress: 0 },
+      { id: 'WO-20260610-010', title: '12F 会议室空调不制冷', type: '报修', priority: '高', location: 'A栋 12F', creator: '星辰科技', assignee: '维修二组·王磊', status: '处理中', createdAt: '2026-06-10 08:50', progress: 35 },
+      { id: 'WO-20260610-009', title: '地下车库 B2 照明巡检', type: '巡检', priority: '中', location: '地下室 B2', creator: '工程部', assignee: '工程部·陈晨', status: '处理中', createdAt: '2026-06-10 08:30', progress: 80 },
+      { id: 'WO-20260610-008', title: '电梯 #3 异响投诉', type: '投诉', priority: '紧急', location: 'C栋 电梯厅', creator: '租户热线', assignee: '', status: '待派单', createdAt: '2026-06-10 08:05', progress: 0 },
+      { id: 'WO-20260609-027', title: '5F 走廊吊顶渗水', type: '报修', priority: '高', location: 'B栋 5F', creator: '保洁组', assignee: '维修一组·李强', status: '处理中', createdAt: '2026-06-09 16:40', progress: 45 },
+      { id: 'WO-20260609-026', title: '消防通道杂物堆放投诉', type: '投诉', priority: '中', location: 'A栋 7F', creator: '租户热线', assignee: '保洁组·刘芳', status: '已完成', createdAt: '2026-06-09 15:22', progress: 100 },
+      { id: 'WO-20260609-025', title: '冷却塔月度巡检', type: '巡检', priority: '中', location: '裙楼 屋面', creator: '工程部', assignee: '工程部·陈晨', status: '已完成', createdAt: '2026-06-09 14:10', progress: 100 },
+      { id: 'WO-20260609-024', title: '8F 女卫感应水阀失效', type: '报修', priority: '中', location: 'A栋 8F', creator: '保洁组', assignee: '维修一组·张伟', status: '已完成', createdAt: '2026-06-09 11:35', progress: 100 },
+      { id: 'WO-20260609-023', title: '门禁系统升级配合', type: '其他', priority: '低', location: 'B栋 全栋', creator: '弱电机房', assignee: '维修二组·赵峰', status: '处理中', createdAt: '2026-06-09 10:18', progress: 20 },
+      { id: 'WO-20260608-019', title: '2F 商铺玻璃门合页松动', type: '报修', priority: '中', location: 'C栋 2F', creator: '商管中心', assignee: '维修二组·王磊', status: '已完成', createdAt: '2026-06-08 17:02', progress: 100 },
+      { id: 'WO-20260608-018', title: '新风机组滤网更换巡检', type: '巡检', priority: '低', location: 'A栋 屋面', creator: '工程部', assignee: '工程部·陈晨', status: '已完成', createdAt: '2026-06-08 15:44', progress: 100 },
+      { id: 'WO-20260608-017', title: '车库道闸抬杆缓慢', type: '报修', priority: '高', location: '地下室 B1', creator: '安保中心', assignee: '', status: '待派单', createdAt: '2026-06-08 14:20', progress: 0 },
+      { id: 'WO-20260608-016', title: '11F 公区噪音投诉', type: '投诉', priority: '中', location: 'B栋 11F', creator: '租户热线', assignee: '保洁组·刘芳', status: '已完成', createdAt: '2026-06-08 10:55', progress: 100 },
+      { id: 'WO-20260607-013', title: '配电室温湿度传感器离线', type: '报修', priority: '紧急', location: '地下室 B1', creator: '弱电机房', assignee: '维修一组·李强', status: '已完成', createdAt: '2026-06-07 16:30', progress: 100 },
+      { id: 'WO-20260607-012', title: '园区路灯巡检', type: '巡检', priority: '低', location: '园区 室外', creator: '工程部', assignee: '工程部·陈晨', status: '已完成', createdAt: '2026-06-07 09:12', progress: 100 },
+      { id: 'WO-20260606-009', title: '租户搬迁货梯使用申请', type: '其他', priority: '低', location: 'C栋 货梯', creator: '商管中心', assignee: '安保中心·周明', status: '已完成', createdAt: '2026-06-06 13:40', progress: 100 },
+    ],
+  };
+}
+
+/* ---------- 自测量容器（替代 ResponsiveContainer，避免 transform:scale 下 ResizeObserver 不触发） ---------- */
+function AutoBox({ children }){
+  const ref = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+      setSize((p) => (p.w === w && p.h === h) ? p : { w, h });
+    };
+    measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 60);
+    return () => { ro && ro.disconnect(); window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {size.w > 0 && size.h > 0 ? children(size.w, size.h) : null}
+    </div>
+  );
+}
+
+/* ---------- 卡片外壳（菱形 dot + 中文标题 + 英文小字） ---------- */
+function GlowCard({ title, en, extra, children, className, bodyClass }){
+  return (
+    <div className={"glass flex flex-col " + (className || "")}>
+      <div className="card-title">
+        <span className="dot"></span>
+        <h3>{title}</h3>
+        {en ? <span className="title-en">{en}</span> : null}
+        <div className="ml-auto">{extra}</div>
+      </div>
+      <div className={"flex-1 min-h-0 px-3.5 pb-3 pt-2 " + (bodyClass || "")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 状态徽标 ---------- */
+function StatusBadge({ status }){
+  const c = STATUS_COLOR[status] || 'var(--txt-dim)';
+  return (
+    <span className="px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap" style={{ color: c, background: c + '22' }}>
+      {status}
+    </span>
+  );
+}
+
+/* ---------- 优先级徽标 ---------- */
+function PriorityBadge({ priority }){
+  const c = PRIORITY_COLOR[priority] || 'var(--txt-dim)';
+  return (
+    <span className="px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap" style={{ color: c, border: '1px solid ' + c + '66', background: c + '14' }}>
+      {priority}
+    </span>
+  );
+}
+
+/* ---------- 处理进度条 ---------- */
+function Progress({ value, color }){
+  const c = color || (value >= 100 ? 'var(--green)' : 'var(--blue)');
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(20,60,110,.1)' }}>
+        <div className="h-full rounded-full" style={{ width: value + '%', background: c, boxShadow: '0 0 6px ' + c, transition: 'width .8s ease' }}></div>
+      </div>
+      <span className="num text-[11px] font-bold w-8 text-right" style={{ color: c }}>{value}%</span>
+    </div>
+  );
+}
+
+/* ============================================================
+   顶部栏：返回综合态势 + 大标题 + 实时时钟
+   ============================================================ */
+function TopBar({ now }){
+  const date = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+  return (
+    <div className="relative h-[74px] flex items-center px-5 shrink-0">
+      {/* 装饰底线 */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(43,127,255,.5),transparent)' }}></div>
+
+      {/* 左：返回综合态势 */}
+      <div className="flex items-center gap-3 w-[360px]">
+        <a href="./" className="glass px-4 py-2 text-[14px] font-medium transition hover:bg-white/10"
+          style={{ borderRadius: 8, color: 'var(--cyan)', textDecoration: 'none' }}>
+          ⟵ 综合态势
+        </a>
+      </div>
+
+      {/* 中：标题 */}
+      <div className="flex-1 flex flex-col items-center justify-center -mt-1">
+        <h1 className="text-[34px] font-black tracking-[6px] glitch">工单系统</h1>
+        <div className="num text-[11px] tracking-[5px]" style={{ color: 'var(--txt-dim)' }}>
+          WORK ORDER MANAGEMENT SYSTEM
+        </div>
+      </div>
+
+      {/* 右：实时时钟 */}
+      <div className="w-[360px] flex justify-end">
+        <div className="leading-tight text-right">
+          <div className="num text-[22px] font-bold" style={{ color: 'var(--cyan)' }}>{time}</div>
+          <div className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{date} {week}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 切换条
+   ============================================================ */
+const TABS = ['工单概览', '报修中心', '工单中心'];
+
+function TabBar({ tab, onChange }){
+  return (
+    <div className="flex justify-center shrink-0 mt-3">
+      <div className="glass flex gap-2 px-2 py-1.5" style={{ borderRadius: 10 }}>
+        {TABS.map((t) => (
+          <button key={t} onClick={() => onChange(t)}
+            className="px-8 py-1.5 text-[14px] rounded-md transition"
+            style={tab === t
+              ? { background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#04101f', fontWeight: 700, boxShadow: '0 0 14px rgba(43,127,255,.4), inset 0 0 0 1px rgba(226,58,130,.3)' }
+              : { color: 'var(--txt-dim)' }}>
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 1：工单概览
+   ============================================================ */
+
+/* ---------- KPI 卡片 ---------- */
+function KpiCard({ label, en, value, color, icon }){
+  return (
+    <div className="glass flex-1 flex items-center gap-4 px-6" style={{ borderRadius: 8 }}>
+      <span className="w-12 h-12 rounded-lg flex items-center justify-center text-[22px] shrink-0"
+        style={{ background: color + '1e', filter: 'drop-shadow(0 0 6px ' + color + ')' }}>{icon}</span>
+      <div className="leading-tight">
+        <div className="num text-[32px] font-bold glow-text leading-none" style={{ color }}>{value}</div>
+        <div className="text-[13px] mt-1.5" style={{ color: 'var(--txt)' }}>{label}
+          <span className="title-en ml-2">{en}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 完成率环形 ---------- */
+function RateRing({ rate }){
+  return (
+    <div className="glass flex items-center justify-center gap-3 px-4" style={{ borderRadius: 8, width: 260 }}>
+      <div className="relative shrink-0" style={{ width: 110, height: 110 }}>
+        <PieChart width={110} height={110}>
+          <Pie data={[{ value: rate }, { value: 100 - rate }]} dataKey="value" cx="50%" cy="50%"
+            startAngle={90} endAngle={-270} innerRadius={40} outerRadius={51} stroke="none" cornerRadius={6}>
+            <Cell fill="#1fa85f" style={{ filter: 'drop-shadow(0 0 6px #1fa85f)' }} />
+            <Cell fill="rgba(20,60,110,.09)" />
+          </Pie>
+        </PieChart>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="num text-[24px] font-bold glow-text" style={{ color: 'var(--green)' }}>{rate}<span className="text-[12px]">%</span></div>
+        </div>
+      </div>
+      <div className="leading-tight">
+        <div className="text-[14px] font-bold" style={{ color: 'var(--txt)' }}>完成率</div>
+        <div className="title-en mt-0.5">Completion</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 年度月度趋势面积图 ---------- */
+function TrendCard({ data }){
+  return (
+    <GlowCard title="年度工单趋势" en="Annual Trend" className="flex-[1.7] min-w-0"
+      extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>单位：单 / 月</span>}>
+      <AutoBox>{(w, h) => (
+        <AreaChart width={w} height={h} data={data} margin={{ top: 10, right: 12, left: -16, bottom: 0 }}>
+          <defs>
+            <linearGradient id="woTrend" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2b7fff" stopOpacity={.5} />
+              <stop offset="100%" stopColor="#2b7fff" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(20,60,110,.09)" vertical={false} />
+          <XAxis dataKey="month" tick={axisStyle} axisLine={{ stroke: 'rgba(255,255,255,.12)' }} tickLine={false} />
+          <YAxis tick={axisStyle} axisLine={false} tickLine={false} width={34} />
+          <Tooltip cursor={{ stroke: 'rgba(43,127,255,.4)' }} />
+          <Area type="monotone" dataKey="count" name="工单量" stroke="#2b7fff" strokeWidth={2.2} fill="url(#woTrend)"
+            dot={{ r: 2.5, fill: '#2b7fff', strokeWidth: 0 }} activeDot={{ r: 4 }} />
+        </AreaChart>
+      )}</AutoBox>
+    </GlowCard>
+  );
+}
+
+/* ---------- 类型分布环形 ---------- */
+function TypeCard({ data }){
+  const total = data.reduce((a, b) => a + b.v, 0);
+  return (
+    <GlowCard title="工单类型分布" en="By Type" className="flex-1 min-w-0">
+      <div className="h-full flex items-center">
+        <div className="relative shrink-0" style={{ width: 158, height: 158 }}>
+          <PieChart width={158} height={158}>
+            <Pie data={data} dataKey="v" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={68}
+              paddingAngle={3} stroke="none" startAngle={90} endAngle={-270}>
+              {data.map((e, i) => {
+                const c = TYPE_COLOR[e.name] || '#8a4fd6';
+                return <Cell key={i} fill={c} style={{ filter: 'drop-shadow(0 0 4px ' + c + ')' }} />;
+              })}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="num text-[26px] font-bold glow-text" style={{ color: 'var(--cyan)' }}>{total}</div>
+            <div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>本月总量</div>
+          </div>
+        </div>
+        {/* 图例 + 数值 */}
+        <div className="flex-1 min-w-0 pl-4 space-y-2.5">
+          {data.map((e) => {
+            const c = TYPE_COLOR[e.name] || '#8a4fd6';
+            const pct = total ? Math.round((e.v / total) * 100) : 0;
+            return (
+              <div key={e.name} className="flex items-center gap-2 text-[12px]">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c, boxShadow: '0 0 6px ' + c }}></span>
+                <span className="w-8" style={{ color: 'var(--txt)' }}>{e.name}</span>
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(20,60,110,.09)' }}>
+                  <div className="h-full rounded-full" style={{ width: pct + '%', background: c, boxShadow: '0 0 6px ' + c }}></div>
+                </div>
+                <span className="num text-[13px] font-bold w-7 text-right" style={{ color: c }}>{e.v}</span>
+                <span className="num text-[10px] w-8 text-right" style={{ color: 'var(--txt-dim)' }}>{pct}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ---------- 最新工单列表 ---------- */
+function LatestList({ list }){
+  const latest = list.slice(0, 8); // 接口返回已按时间倒序，取最新 8 条
+  return (
+    <GlowCard title="最新工单" en="Latest Orders" className="flex-1 min-h-0"
+      extra={<span className="num text-[11px] blink" style={{ color: 'var(--cyan)' }}>● 实时</span>}
+      bodyClass="overflow-y-auto scrollbar">
+      <table className="w-full text-[13px]" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+        <thead>
+          <tr style={{ color: 'var(--txt-dim)' }} className="text-left text-[12px]">
+            <th className="px-3 font-medium">编号</th><th className="px-3 font-medium">标题</th>
+            <th className="px-3 font-medium">类型</th><th className="px-3 font-medium">优先级</th>
+            <th className="px-3 font-medium">位置</th><th className="px-3 font-medium">处理人</th>
+            <th className="px-3 font-medium w-[170px]">进度</th><th className="px-3 font-medium">状态</th>
+            <th className="px-3 font-medium">创建时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {latest.map((o) => (
+            <tr key={o.id} style={{ background: 'rgba(20,60,110,.05)' }}>
+              <td className="px-3 py-2 num rounded-l" style={{ color: 'var(--cyan)' }}>{o.id}</td>
+              <td className="px-3 py-2 font-medium" style={{ color: 'var(--txt)' }}>{o.title}</td>
+              <td className="px-3 py-2"><span style={{ color: TYPE_COLOR[o.type] }}>{o.type}</span></td>
+              <td className="px-3 py-2"><PriorityBadge priority={o.priority} /></td>
+              <td className="px-3 py-2" style={{ color: 'var(--txt-dim)' }}>{o.location}</td>
+              <td className="px-3 py-2" style={{ color: 'var(--txt-dim)' }}>{o.assignee || '—'}</td>
+              <td className="px-3 py-2"><Progress value={o.progress} /></td>
+              <td className="px-3 py-2"><StatusBadge status={o.status} /></td>
+              <td className="px-3 py-2 num rounded-r" style={{ color: 'var(--txt-dim)' }}>{o.createdAt}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </GlowCard>
+  );
+}
+
+function OverviewTab({ d }){
+  const s = d.stats;
+  return (
+    <div className="flex-1 min-h-0 flex flex-col gap-3">
+      {/* 第一行：4 KPI + 完成率环形 */}
+      <div className="flex gap-3 shrink-0" style={{ height: 136 }}>
+        <KpiCard label="总工单" en="Total" value={s.total} color="#0a93c9" icon="📋" />
+        <KpiCard label="待派单" en="Pending" value={s.pending} color="#ef8326" icon="📨" />
+        <KpiCard label="处理中" en="Processing" value={s.processing} color="#2b7fff" icon="🛠" />
+        <KpiCard label="已完成" en="Done" value={s.done} color="#1fa85f" icon="✅" />
+        <RateRing rate={s.rate} />
+      </div>
+      {/* 第二行：年度趋势 + 类型分布 */}
+      <div className="flex gap-3 shrink-0" style={{ height: 320 }}>
+        <TrendCard data={d.yearTrend} />
+        <TypeCard data={d.byType} />
+      </div>
+      {/* 第三行：最新工单 */}
+      <LatestList list={d.list} />
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 2：报修中心
+   ============================================================ */
+const REPAIR_TYPES = ['报修', '巡检', '投诉', '其他'];
+
+/* 表单字段外壳（定义在组件外，避免每次渲染重建导致输入框失焦） */
+function Field({ label, children }){
+  return (
+    <div>
+      <div className="text-[13px] mb-1.5 flex items-center gap-1" style={{ color: 'var(--txt)' }}>
+        <span style={{ color: 'var(--magenta)' }}>*</span>{label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RepairTab({ d, onCreate }){
+  // 发起报修表单状态
+  const [form, setForm] = useState({ title: '', location: '', type: '报修', desc: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = () => {
+    if (!form.title.trim() || !form.location.trim() || submitting) return;
+    setSubmitting(true);
+    // 提交报修 → 服务端转工单
+    fetch('api/v1/workorders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(() => {
+        // 成功：清空表单并刷新列表
+        setForm({ title: '', location: '', type: '报修', desc: '' });
+        onCreate();
+      })
+      .catch(() => {})  // 失败静默
+      .finally(() => setSubmitting(false));
+  };
+
+  // 报修工单列表（取报修/投诉类，按接口顺序即时间倒序）
+  const repairs = d.list.filter((o) => o.type === '报修' || o.type === '投诉');
+  const canSubmit = form.title.trim() && form.location.trim();
+
+  return (
+    <div className="flex-1 min-h-0 flex gap-3">
+      {/* 左：发起报修表单 */}
+      <GlowCard title="发起报修" en="New Repair" className="w-[560px] shrink-0"
+        extra={<span className="text-[11px] px-2 py-0.5 rounded-full" style={{ color: 'var(--cyan)', background: 'rgba(10,147,201,.14)' }}>提交后自动转工单</span>}>
+        <div className="h-full flex flex-col gap-4 pt-2">
+          <Field label="报修标题">
+            <input className="ipt" placeholder="如：3F 茶水间水龙头漏水" value={form.title} onChange={set('title')} maxLength={40} />
+          </Field>
+          <Field label="所在位置">
+            <input className="ipt" placeholder="如：A栋 3F" value={form.location} onChange={set('location')} maxLength={20} />
+          </Field>
+          <Field label="报修类型">
+            <select className="ipt" value={form.type} onChange={set('type')}>
+              {REPAIR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </Field>
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="text-[13px] mb-1.5" style={{ color: 'var(--txt)' }}>问题描述</div>
+            <textarea className="ipt flex-1 resize-none scrollbar" placeholder="请描述故障现象、发生时间等，便于快速定位处理…"
+              value={form.desc} onChange={set('desc')} maxLength={200} style={{ minHeight: 120 }} />
+          </div>
+          <button onClick={submit}
+            className="h-11 rounded-md text-[15px] font-bold transition"
+            style={canSubmit && !submitting
+              ? { background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#04101f', boxShadow: '0 0 16px rgba(43,127,255,.45)', cursor: 'pointer' }
+              : { background: 'rgba(20,60,110,.12)', color: 'var(--txt-dim)', cursor: 'not-allowed' }}>
+            {submitting ? '提交中…' : '提 交 报 修'}
+          </button>
+        </div>
+      </GlowCard>
+
+      {/* 右：报修工单列表 */}
+      <GlowCard title="报修工单" en="Repair Orders" className="flex-1 min-w-0"
+        extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>共 <b style={{ color: 'var(--cyan)' }}>{repairs.length}</b> 条</span>}
+        bodyClass="overflow-y-auto scrollbar">
+        <div className="space-y-2.5">
+          {repairs.map((o) => (
+            <div key={o.id} className="rounded px-4 py-3" style={{ background: 'rgba(20,60,110,.05)', borderLeft: '3px solid ' + (STATUS_COLOR[o.status] || 'var(--cyan)') }}>
+              <div className="flex items-center gap-3">
+                <span className="num text-[12px]" style={{ color: 'var(--cyan)' }}>{o.id}</span>
+                <span className="text-[14px] font-medium flex-1 truncate" style={{ color: 'var(--txt)' }}>{o.title}</span>
+                <PriorityBadge priority={o.priority} />
+                <StatusBadge status={o.status} />
+              </div>
+              <div className="flex items-center gap-4 mt-2 text-[12px]" style={{ color: 'var(--txt-dim)' }}>
+                <span>📍 {o.location}</span>
+                <span>发起：{o.creator}</span>
+                <span>处理：{o.assignee || '待派单'}</span>
+                <span className="num ml-auto">{o.createdAt}</span>
+              </div>
+              <div className="mt-2"><Progress value={o.progress} color={STATUS_COLOR[o.status]} /></div>
+            </div>
+          ))}
+        </div>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 3：工单中心（全量表格 + 派单 / 完成）
+   ============================================================ */
+
+/* ---------- 派单 Modal（玻璃卡片 + 遮罩 + 右上角✕） ---------- */
+function DispatchModal({ order, onClose, onConfirm }){
+  const [assignee, setAssignee] = useState(ASSIGNEES[0]);
+  const [custom, setCustom] = useState('');
+  if (!order) return null;
+  const finalAssignee = custom.trim() || assignee; // 手填优先于下拉
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(150,185,225,.45)', backdropFilter: 'blur(2px)' }} onClick={onClose}>
+      <div className="glass flex flex-col" style={{ width: 460, borderRadius: 10 }} onClick={(e) => e.stopPropagation()}>
+        <div className="card-title">
+          <span className="dot"></span>
+          <h3>工单派单</h3>
+          <span className="title-en">Dispatch</span>
+          <button onClick={onClose} className="ml-auto w-7 h-7 rounded flex items-center justify-center text-[16px] transition hover:bg-white/10" style={{ color: 'var(--txt-dim)' }}>✕</button>
+        </div>
+        <div className="px-4 py-4 space-y-4">
+          {/* 工单摘要 */}
+          <div className="rounded px-3 py-2.5 text-[13px]" style={{ background: 'rgba(20,60,110,.05)' }}>
+            <span className="num" style={{ color: 'var(--cyan)' }}>{order.id}</span>
+            <span className="ml-2 font-medium" style={{ color: 'var(--txt)' }}>{order.title}</span>
+            <span className="ml-2" style={{ color: 'var(--txt-dim)' }}>{order.location}</span>
+          </div>
+          <div>
+            <div className="text-[13px] mb-1.5" style={{ color: 'var(--txt)' }}>选择处理人</div>
+            <select className="ipt" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+              {ASSIGNEES.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className="text-[13px] mb-1.5" style={{ color: 'var(--txt-dim)' }}>或手动输入（优先生效）</div>
+            <input className="ipt" placeholder="如：维修三组·孙浩" value={custom} onChange={(e) => setCustom(e.target.value)} maxLength={20} />
+          </div>
+          <div className="flex justify-end gap-2.5 pt-1">
+            <button onClick={onClose} className="px-5 py-2 rounded-md text-[13px] transition hover:bg-white/10"
+              style={{ border: '1px solid rgba(43,127,255,.3)', color: 'var(--txt-dim)' }}>取消</button>
+            <button onClick={() => onConfirm(order.id, finalAssignee)}
+              className="px-5 py-2 rounded-md text-[13px] font-bold"
+              style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#04101f', boxShadow: '0 0 14px rgba(43,127,255,.4)' }}>
+              确认派单
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CenterTab({ d, onReload }){
+  const [dispatching, setDispatching] = useState(null); // 当前待派单的工单对象
+  const [filter, setFilter] = useState('全部');
+  const s = d.stats;
+
+  // 派单：POST dispatch，id 放 body，成功后刷新并关闭 Modal
+  const doDispatch = (id, assignee) => {
+    fetch('api/v1/workorders/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, assignee }),
+    })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(() => onReload())
+      .catch(() => {})  // 失败静默
+      .finally(() => setDispatching(null));
+  };
+
+  // 完成：POST complete，id 放 body，成功后刷新
+  const doComplete = (id) => {
+    fetch('api/v1/workorders/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(() => onReload())
+      .catch(() => {});  // 失败静默
+  };
+
+  const FILTERS = ['全部', '待派单', '处理中', '已完成'];
+  const list = filter === '全部' ? d.list : d.list.filter((o) => o.status === filter);
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <GlowCard title="工单中心" en="Order Center" className="flex-1 min-h-0"
+        extra={
+          <div className="flex items-center gap-3">
+            <span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+              待派单 <b style={{ color: 'var(--orange)' }}>{s.pending}</b> · 处理中 <b style={{ color: 'var(--blue)' }}>{s.processing}</b> · 已完成 <b style={{ color: 'var(--green)' }}>{s.done}</b>
+            </span>
+            <div className="flex gap-1">
+              {FILTERS.map((f) => (
+                <button key={f} onClick={() => setFilter(f)}
+                  className="px-3 py-1 rounded text-[12px] transition"
+                  style={filter === f
+                    ? { background: 'rgba(43,127,255,.2)', color: 'var(--cyan)', fontWeight: 700, border: '1px solid rgba(43,127,255,.4)' }
+                    : { color: 'var(--txt-dim)', border: '1px solid transparent' }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+        bodyClass="overflow-y-auto scrollbar">
+        <table className="w-full text-[13px]" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+          <thead>
+            <tr style={{ color: 'var(--txt-dim)' }} className="text-left text-[12px]">
+              <th className="px-3 font-medium">编号</th><th className="px-3 font-medium">标题</th>
+              <th className="px-3 font-medium">类型</th><th className="px-3 font-medium">优先级</th>
+              <th className="px-3 font-medium">位置</th><th className="px-3 font-medium">发起人</th>
+              <th className="px-3 font-medium">处理人</th><th className="px-3 font-medium w-[150px]">进度</th>
+              <th className="px-3 font-medium">状态</th><th className="px-3 font-medium">创建时间</th>
+              <th className="px-3 font-medium text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((o) => (
+              <tr key={o.id} style={{ background: 'rgba(20,60,110,.05)' }}>
+                <td className="px-3 py-2.5 num rounded-l" style={{ color: 'var(--cyan)' }}>{o.id}</td>
+                <td className="px-3 py-2.5 font-medium max-w-[260px] truncate" style={{ color: 'var(--txt)' }}>{o.title}</td>
+                <td className="px-3 py-2.5"><span style={{ color: TYPE_COLOR[o.type] }}>{o.type}</span></td>
+                <td className="px-3 py-2.5"><PriorityBadge priority={o.priority} /></td>
+                <td className="px-3 py-2.5" style={{ color: 'var(--txt-dim)' }}>{o.location}</td>
+                <td className="px-3 py-2.5" style={{ color: 'var(--txt-dim)' }}>{o.creator}</td>
+                <td className="px-3 py-2.5" style={{ color: 'var(--txt)' }}>{o.assignee || '—'}</td>
+                <td className="px-3 py-2.5"><Progress value={o.progress} color={STATUS_COLOR[o.status]} /></td>
+                <td className="px-3 py-2.5"><StatusBadge status={o.status} /></td>
+                <td className="px-3 py-2.5 num" style={{ color: 'var(--txt-dim)' }}>{o.createdAt}</td>
+                <td className="px-3 py-2.5 rounded-r text-center whitespace-nowrap">
+                  {o.status === '待派单' ? (
+                    <button onClick={() => setDispatching(o)}
+                      className="px-3 py-1 rounded text-[12px] font-medium text-[#04101f]"
+                      style={{ background: 'linear-gradient(135deg,#ef8326,#d99a16)', boxShadow: '0 0 10px rgba(239,131,38,.35)' }}>派单</button>
+                  ) : o.status === '处理中' ? (
+                    <button onClick={() => doComplete(o.id)}
+                      className="px-3 py-1 rounded text-[12px] font-medium text-[#04101f]"
+                      style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', boxShadow: '0 0 10px rgba(43,127,255,.35)' }}>完成</button>
+                  ) : (
+                    <span className="text-[12px]" style={{ color: 'var(--txt-dim)' }}>已归档</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </GlowCard>
+
+      {/* 派单弹窗 */}
+      <DispatchModal order={dispatching} onClose={() => setDispatching(null)} onConfirm={doDispatch} />
+    </div>
+  );
+}
+
+/* ============================================================
+   应用根：时钟 + 5 秒轮询 + Tab 路由
+   ============================================================ */
+function App(){
+  const [d, setD] = useState(initialData);   // 初始 mock 兜底
+  const [now, setNow] = useState(new Date());
+  const [tab, setTab] = useState('工单概览');
+
+  // 拉取工单数据（失败静默，保留旧数据 / mock）
+  const load = () => fetch('api/v1/workorders').then((r) => r.json()).then(setD).catch(() => {});
+
+  // 每秒时钟
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 工单数据每 5 秒轮询
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="absolute inset-0 flex flex-col">
+      <TopBar now={now} />
+      <TabBar tab={tab} onChange={setTab} />
+      <div className="flex-1 min-h-0 flex flex-col px-5 pt-3 pb-5">
+        {tab === '工单概览' ? <OverviewTab d={d} /> : null}
+        {tab === '报修中心' ? <RepairTab d={d} onCreate={load} /> : null}
+        {tab === '工单中心' ? <CenterTab d={d} onReload={load} /> : null}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

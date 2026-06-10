@@ -3,5 +3,5 @@ package web
 
 import "embed"
 
-//go:embed index.html
+//go:embed *.html
 var FS embed.FS

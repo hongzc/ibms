@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>运营管理 — IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-0:#bcd9fb;
+    --bg-1:#d8eaff;
+    --cyan:#0a93c9;
+    --blue:#2b7fff;
+    --magenta:#e23a82;
+    --violet:#8a4fd6;
+    --orange:#ef8326;
+    --red:#e24550;
+    --green:#1fa85f;
+    --txt:#123c6e;
+    --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:#cfe4ff; overflow:hidden; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+
+  /* ---- 1920×1080 舞台缩放 ---- */
+  #stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1300px 760px at 50% -12%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    overflow:hidden;
+  }
+  #stage{
+    width:1920px; height:1080px; position:relative;
+    transform-origin:center center;
+    background:
+      radial-gradient(1500px 880px at 50% 4%, #eaf4ff 0%, transparent 56%),
+      linear-gradient(180deg,#9ec6f2 0%,#bcd9fb 48%,#d8eaff 100%);
+  }
+  #root{ width:1920px; height:1080px; }
+
+  /* ---- 玻璃拟态卡片（四角高亮） ---- */
+  .glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(220,238,255,.08));
+    border:1px solid rgba(120,170,230,.32);
+    border-radius:8px;
+    box-shadow:0 6px 26px rgba(60,110,180,0.1), inset 0 1px 0 rgba(255,255,255,.5);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  }
+  .glass::before,.glass::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color:var(--cyan); opacity:.85;
+  }
+  .glass::before{ left:-1px; top:-1px; border-left:2px solid; border-top:2px solid; border-top-left-radius:8px; }
+  .glass::after{ right:-1px; bottom:-1px; border-right:2px solid; border-bottom:2px solid; border-bottom-right-radius:8px; }
+
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 14px 8px; position:relative;
+  }
+  .card-title .dot{ width:7px; height:7px; transform:rotate(45deg); background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .card-title h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:1px; color:#0e3a72; }
+  .card-title::after{
+    content:""; position:absolute; left:14px; right:14px; bottom:0; height:1px;
+    background:linear-gradient(90deg, var(--cyan), rgba(43,127,255,0) 70%);
+  }
+  .title-en{ font-size:10px; color:var(--txt-dim); letter-spacing:2px; text-transform:uppercase; font-family:'Oxanium'; }
+
+  .glow-text{ text-shadow:0 1px 1px rgba(255,255,255,.55); }
+  .scrollbar::-webkit-scrollbar{ width:6px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.35); border-radius:3px; }
+  .scrollbar::-webkit-scrollbar-track{ background:transparent; }
+
+  @keyframes blink{ 0%,100%{ opacity:1;} 50%{ opacity:.25;} }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+
+  .recharts-default-tooltip{ background:rgba(255,255,255,.95)!important; border:1px solid var(--line)!important; border-radius:6px!important; }
+  .recharts-tooltip-label,.recharts-tooltip-item{ color:#123c6e!important; }
+
+  .glitch{ position:relative; color:#0e3a72;
+    text-shadow:0 2px 10px rgba(255,255,255,.7), 1px 0 rgba(43,127,255,.25); }
+
+  /* ---- KPI 卡四角小托架 ---- */
+  .kpi{ position:relative; }
+  .kpi::before{ content:""; position:absolute; top:-6px; width:13px; height:13px; border-top:2px solid var(--accent); opacity:.9; }
+  .kpi::after{ content:""; position:absolute; bottom:-6px; width:13px; height:13px; border-bottom:2px solid var(--accent); opacity:.55; }
+  .kpi.l::before{ left:-11px; border-left:2px solid var(--accent); }
+  .kpi.l::after{ left:-11px; border-left:2px solid var(--accent); }
+  .kpi.r::before{ right:-11px; border-right:2px solid var(--accent); }
+  .kpi.r::after{ right:-11px; border-right:2px solid var(--accent); }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage"><div id="root"></div></div>
+  </div>
+
+  <script>
+    // 静默 recharts 2.x 已知无害的 defaultProps 告警
+    (function(){
+      var _err = console.error;
+      console.error = function(){
+        var m = arguments[0];
+        if (typeof m === 'string' && m.indexOf('defaultProps') !== -1) return;
+        return _err.apply(console, arguments);
+      };
+    })();
+    // ---- 1920×1080 舞台等比缩放 ----
+    function fitStage(){
+      var s = document.getElementById('stage');
+      var scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitStage);
+    fitStage();
+  </script>
+
+  <script type="text/babel">
+/* ============================================================
+   IBMS 运营管理 — 楼宇统计 / 房态展示 / 租约管理
+   ============================================================ */
+const { useState, useEffect } = React;
+const { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip } = Recharts;
+
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+/* 房态状态色（统一引用 :root 变量） */
+const STATUS_COLOR = {
+  '已租': 'var(--green)',
+  '空置': 'var(--blue)',
+  '欠费': 'var(--orange)',
+  '过期': 'var(--red)',
+};
+/* 状态色实体值（供 recharts 渐变/阴影拼接字符串使用） */
+const TYPE_COLORS = ['#2b7fff', '#0a93c9', '#8a4fd6', '#ef8326', '#e23a82'];
+
+/* ============================================================
+   Mock 兜底数据（形状与接口返回完全一致，fetch 失败时展示）
+   ============================================================ */
+
+/* ---- GET api/v1/operation/overview 兜底 ---- */
+function mockOverview(){
+  return {
+    totalArea: 186400, rentRate: 87.6, avgPrice: 4.2, leasableArea: 23100, billingRate: 92.3,
+    buildings: [
+      { name: 'A 栋', area: 68200, rentRate: 91.2, avgPrice: 4.5, leasableArea: 6000,  rooms: 86, leasableRooms: 8 },
+      { name: 'B 栋', area: 62400, rentRate: 86.4, avgPrice: 4.1, leasableArea: 8500,  rooms: 78, leasableRooms: 11 },
+      { name: 'C 栋', area: 55800, rentRate: 84.7, avgPrice: 3.9, leasableArea: 8600,  rooms: 72, leasableRooms: 12 },
+    ],
+  };
+}
+
+/* ---- GET api/v1/operation/rooms 兜底：3 栋楼 66 间房，确定性生成 ---- */
+function mockRooms(){
+  const cfg = [ ['A 栋', 8], ['B 栋', 7], ['C 栋', 7] ];          // 楼栋 + 层数，每层 3 间
+  const types = ['办公', '商铺', '餐饮', '仓储'];
+  const tenants = [
+    '星辰科技有限公司', '蓝海传媒集团', '恒宇贸易有限公司', '云图数据科技', '金桥律师事务所',
+    '悦活健身', '嘉禾餐饮管理', '启明教育咨询', '百川物流', '拓界设计工作室', '新视野广告', '合创投资',
+  ];
+  // 状态按固定节奏分布：大多数已租，间或空置/欠费/过期
+  const pattern = ['已租','已租','空置','已租','已租','欠费','已租','空置','已租','已租','过期','已租','空置','已租'];
+  const ends = ['2026-09-30','2026-12-31','2027-03-31','2027-06-30','2027-11-30','2028-04-30'];
+  const rooms = [];
+  let i = 0;
+  cfg.forEach(([building, floors]) => {
+    const b = building.charAt(0);
+    for (let f = 1; f <= floors; f++){
+      for (let r = 1; r <= 3; r++){
+        const status = pattern[i % pattern.length];
+        const vacant = status === '空置';
+        const expired = status === '过期';
+        rooms.push({
+          id: b + '-' + f + '-' + pad(r),
+          building, floor: f, name: '' + (f * 100 + r),
+          area: 120 + ((i * 37) % 260),
+          status,
+          type: types[i % types.length],
+          tenant: vacant ? '' : tenants[i % tenants.length],
+          price: Math.round((3.5 + ((i * 13) % 21) / 10) * 10) / 10,
+          contractEnd: vacant ? '' : (expired ? '2026-0' + (1 + i % 5) + '-15' : ends[i % ends.length]),
+          debt: status === '欠费' ? 8000 + (i % 7) * 3200 : (expired ? 12000 + (i % 5) * 4500 : 0),
+        });
+        i++;
+      }
+    }
+  });
+  return rooms;
+}
+
+/* ---- GET api/v1/operation/leases 兜底：12 份租约 ---- */
+function mockLeases(){
+  return [
+    { id: 'HT-2025-018', name: '星辰科技租赁合同',   tenant: '星辰科技有限公司', contact: '13901234567', room: 'A栋 1203', start: '2025-04-01', end: '2027-03-31', monthlyRent: 43200, paidProgress: 100, termProgress: 56, status: '履约中',   expireDays: 294 },
+    { id: 'HT-2024-052', name: '蓝海传媒租赁合同',   tenant: '蓝海传媒集团',     contact: '13822015890', room: 'A栋 0801', start: '2024-09-01', end: '2026-08-31', monthlyRent: 36800, paidProgress: 92,  termProgress: 88, status: '即将到期', expireDays: 82  },
+    { id: 'HT-2024-037', name: '恒宇贸易租赁合同',   tenant: '恒宇贸易有限公司', contact: '13655128467', room: 'B栋 0502', start: '2024-07-01', end: '2026-06-30', monthlyRent: 28500, paidProgress: 85,  termProgress: 97, status: '即将到期', expireDays: 20  },
+    { id: 'HT-2025-006', name: '云图数据租赁合同',   tenant: '云图数据科技',     contact: '15901883276', room: 'B栋 0701', start: '2025-01-01', end: '2027-12-31', monthlyRent: 51600, paidProgress: 100, termProgress: 48, status: '履约中',   expireDays: 569 },
+    { id: 'HT-2023-089', name: '金桥律所租赁合同',   tenant: '金桥律师事务所',   contact: '13311257709', room: 'A栋 0602', start: '2023-06-01', end: '2026-05-31', monthlyRent: 32400, paidProgress: 78,  termProgress: 100, status: '已逾期',  expireDays: -10 },
+    { id: 'HT-2025-031', name: '悦活健身租赁合同',   tenant: '悦活健身',         contact: '18621904553', room: 'C栋 0201', start: '2025-05-01', end: '2028-04-30', monthlyRent: 62000, paidProgress: 100, termProgress: 37, status: '履约中',   expireDays: 690 },
+    { id: 'HT-2024-064', name: '嘉禾餐饮租赁合同',   tenant: '嘉禾餐饮管理',     contact: '13719226845', room: 'C栋 0102', start: '2024-10-01', end: '2026-09-30', monthlyRent: 45800, paidProgress: 88,  termProgress: 84, status: '即将到期', expireDays: 112 },
+    { id: 'HT-2025-012', name: '启明教育租赁合同',   tenant: '启明教育咨询',     contact: '15822374610', room: 'B栋 0403', start: '2025-03-01', end: '2027-02-28', monthlyRent: 26900, paidProgress: 95,  termProgress: 63, status: '履约中',   expireDays: 263 },
+    { id: 'HT-2024-021', name: '百川物流租赁合同',   tenant: '百川物流',         contact: '13066529871', room: 'C栋 0103', start: '2024-05-01', end: '2026-08-15', monthlyRent: 21500, paidProgress: 70,  termProgress: 90, status: '即将到期', expireDays: 66  },
+    { id: 'HT-2025-044', name: '拓界设计租赁合同',   tenant: '拓界设计工作室',   contact: '18901452236', room: 'A栋 0503', start: '2025-06-01', end: '2027-05-31', monthlyRent: 19800, paidProgress: 100, termProgress: 50, status: '履约中',   expireDays: 355 },
+    { id: 'HT-2023-073', name: '新视野广告租赁合同', tenant: '新视野广告',       contact: '13511308694', room: 'B栋 0303', start: '2023-09-01', end: '2026-04-30', monthlyRent: 23600, paidProgress: 64,  termProgress: 100, status: '已逾期',  expireDays: -41 },
+    { id: 'HT-2025-027', name: '合创投资租赁合同',   tenant: '合创投资',         contact: '13987664320', room: 'A栋 1101', start: '2025-02-01', end: '2028-01-31', monthlyRent: 58400, paidProgress: 100, termProgress: 45, status: '履约中',   expireDays: 600 },
+  ];
+}
+
+/* ============================================================
+   通用小组件
+   ============================================================ */
+
+/* ---- 卡片外壳（与主屏 GlowCard 同款） ---- */
+function GlowCard({ title, en, extra, children, className, bodyClass }){
+  return (
+    <div className={"glass flex flex-col " + (className || "")}>
+      <div className="card-title">
+        <span className="dot"></span>
+        <h3>{title}</h3>
+        {en ? <span className="title-en">{en}</span> : null}
+        <div className="ml-auto">{extra}</div>
+      </div>
+      <div className={"flex-1 min-h-0 px-3.5 pb-3 pt-2 " + (bodyClass || "")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---- 横向进度条（租期/缴纳/出租率通用） ---- */
+function ProgressBar({ pct, color, h }){
+  return (
+    <div className="rounded-full overflow-hidden" style={{ height: h || 8, background: 'rgba(20,60,110,.1)' }}>
+      <div className="h-full rounded-full" style={{
+        width: Math.max(0, Math.min(100, pct)) + '%',
+        background: 'linear-gradient(90deg,' + color + ',rgba(255,255,255,.65))',
+        boxShadow: '0 0 8px ' + color, transition: 'width .8s ease',
+      }}></div>
+    </div>
+  );
+}
+
+/* ---- 状态徽标 ---- */
+function Badge({ text, color }){
+  return (
+    <span className="px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap"
+      style={{ color, background: color.startsWith('var') ? 'rgba(20,60,110,.08)' : color + '22', border: '1px solid ' + color }}>
+      {text}
+    </span>
+  );
+}
+
+/* ============================================================
+   顶部栏：返回综合态势 + 标题 + 实时时钟
+   ============================================================ */
+function TopBar({ now }){
+  const date = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const week = ['周日','周一','周二','周三','周四','周五','周六'][now.getDay()];
+  return (
+    <div className="relative h-[74px] flex items-center px-5 shrink-0">
+      {/* 装饰底线 */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(43,127,255,.5),transparent)' }}></div>
+
+      {/* 左：返回综合态势 */}
+      <div className="flex items-center gap-3 w-[420px]">
+        <a href="./" className="glass px-4 py-2 text-[14px] font-medium transition hover:bg-white/10"
+          style={{ borderRadius: 8, color: 'var(--cyan)', textDecoration: 'none' }}>
+          ⟵ 综合态势
+        </a>
+      </div>
+
+      {/* 中：标题 */}
+      <div className="flex-1 flex flex-col items-center justify-center -mt-1">
+        <h1 className="text-[34px] font-black tracking-[6px] glitch">运营管理</h1>
+        <div className="num text-[11px] tracking-[5px]" style={{ color: 'var(--txt-dim)' }}>
+          OPERATION MANAGEMENT
+        </div>
+      </div>
+
+      {/* 右：实时时钟 */}
+      <div className="flex items-center gap-3 w-[420px] justify-end">
+        <div className="leading-tight text-right">
+          <div className="num text-[22px] font-bold" style={{ color: 'var(--cyan)' }}>{time}</div>
+          <div className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{date} {week}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 1：楼宇统计
+   ============================================================ */
+function BuildingStats({ ov }){
+  const kpis = [
+    { label: '管理总面积',   value: ov.totalArea.toLocaleString(), unit: '㎡',       color: '#2b7fff' },
+    { label: '出租率',       value: ov.rentRate,                   unit: '%',        color: '#1fa85f' },
+    { label: '在租实时均价', value: ov.avgPrice,                   unit: '元/㎡/天', color: '#0a93c9' },
+    { label: '可招商面积',   value: ov.leasableArea.toLocaleString(), unit: '㎡',    color: '#ef8326' },
+    { label: '当前计租率',   value: ov.billingRate,                unit: '%',        color: '#8a4fd6' },
+  ];
+  return (
+    <div className="h-full flex flex-col gap-4">
+      {/* 5 个 KPI 卡 */}
+      <div className="grid grid-cols-5 gap-4 shrink-0">
+        {kpis.map((k, i) => (
+          <div key={i} className="glass kpi l r flex flex-col items-center justify-center py-6" style={{ '--accent': k.color }}>
+            <div className="num text-[38px] font-bold leading-none glow-text" style={{ color: k.color }}>
+              {k.value}<span className="text-[15px] ml-1 font-medium">{k.unit}</span>
+            </div>
+            <div className="text-[14px] mt-2.5" style={{ color: 'var(--txt-dim)' }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 min-h-0 flex gap-4">
+        {/* 楼座租赁情况表格 */}
+        <GlowCard title="各楼座租赁情况" en="Building Leasing" className="flex-1 min-w-0" bodyClass="overflow-y-auto scrollbar">
+          <table className="w-full text-[14px]" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+            <thead>
+              <tr style={{ color: 'var(--txt-dim)' }} className="text-left text-[13px]">
+                <th className="px-3 font-medium">楼座</th>
+                <th className="px-3 font-medium">管理面积 (㎡)</th>
+                <th className="px-3 font-medium w-[240px]">出租率</th>
+                <th className="px-3 font-medium">在租均价 (元/㎡/天)</th>
+                <th className="px-3 font-medium">可招商面积 (㎡)</th>
+                <th className="px-3 font-medium">总房源</th>
+                <th className="px-3 font-medium">可招商房源</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ov.buildings.map((b) => (
+                <tr key={b.name} style={{ background: 'rgba(20,60,110,.05)' }}>
+                  <td className="px-3 py-3.5 rounded-l font-bold" style={{ color: 'var(--txt)' }}>{b.name}</td>
+                  <td className="px-3 py-3.5 num" style={{ color: 'var(--cyan)' }}>{b.area.toLocaleString()}</td>
+                  <td className="px-3 py-3.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><ProgressBar pct={b.rentRate} color="#1fa85f" /></div>
+                      <span className="num text-[13px] font-bold w-[48px] text-right" style={{ color: 'var(--green)' }}>{b.rentRate}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3.5 num" style={{ color: 'var(--blue)' }}>{b.avgPrice}</td>
+                  <td className="px-3 py-3.5 num" style={{ color: 'var(--orange)' }}>{b.leasableArea.toLocaleString()}</td>
+                  <td className="px-3 py-3.5 num" style={{ color: 'var(--txt)' }}>{b.rooms}</td>
+                  <td className="px-3 py-3.5 num rounded-r" style={{ color: 'var(--magenta)' }}>{b.leasableRooms}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </GlowCard>
+
+        {/* 右侧：出租率对比 + 可招商面积占比 */}
+        <div className="w-[520px] shrink-0 flex flex-col gap-4">
+          <GlowCard title="楼座出租率对比" en="Rent Rate" className="flex-1" bodyClass="flex items-center justify-center">
+            <BarChart width={470} height={300} data={ov.buildings} margin={{ top: 16, right: 12, left: -16, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#5b7ea6', fontSize: 13 }} axisLine={{ stroke: 'rgba(43,127,255,.3)' }} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#5b7ea6', fontSize: 12, fontFamily: 'Oxanium' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: 'rgba(43,127,255,.06)' }} formatter={(v) => v + '%'} />
+              <Bar dataKey="rentRate" name="出租率" barSize={46} radius={[5, 5, 0, 0]}>
+                {ov.buildings.map((b, i) => (
+                  <Cell key={i} fill={TYPE_COLORS[i % TYPE_COLORS.length]}
+                    style={{ filter: 'drop-shadow(0 0 5px ' + TYPE_COLORS[i % TYPE_COLORS.length] + ')' }} />
+                ))}
+              </Bar>
+            </BarChart>
+          </GlowCard>
+          <GlowCard title="可招商面积分布" en="Leasable Area" className="h-[280px]" bodyClass="flex items-center gap-5 justify-center">
+            <PieChart width={190} height={190}>
+              <Pie data={ov.buildings} dataKey="leasableArea" nameKey="name" cx="50%" cy="50%"
+                innerRadius={56} outerRadius={82} startAngle={90} endAngle={-270} stroke="none" paddingAngle={3}>
+                {ov.buildings.map((b, i) => (
+                  <Cell key={i} fill={TYPE_COLORS[i % TYPE_COLORS.length]}
+                    style={{ filter: 'drop-shadow(0 0 5px ' + TYPE_COLORS[i % TYPE_COLORS.length] + ')' }} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(v) => v.toLocaleString() + ' ㎡'} />
+            </PieChart>
+            <div className="space-y-2.5">
+              {ov.buildings.map((b, i) => (
+                <div key={b.name} className="flex items-center gap-2 text-[13px]">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: TYPE_COLORS[i % TYPE_COLORS.length] }}></span>
+                  <span style={{ color: 'var(--txt)' }}>{b.name}</span>
+                  <span className="num font-bold ml-1" style={{ color: TYPE_COLORS[i % TYPE_COLORS.length] }}>{b.leasableArea.toLocaleString()}</span>
+                  <span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>㎡</span>
+                </div>
+              ))}
+            </div>
+          </GlowCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 2：房态展示
+   ============================================================ */
+const BUILDING_FILTERS = ['全部', 'A栋', 'B栋', 'C栋'];
+
+/* ---- 房屋画像 Modal（玻璃卡片 + 遮罩 + 右上角✕，参考主屏 Modal） ---- */
+function RoomModal({ room, onClose }){
+  if (!room) return null;
+  const col = STATUS_COLOR[room.status] || 'var(--blue)';
+  const rows = [
+    { k: '房间编号', v: room.id, num: true },
+    { k: '所在楼座', v: room.building + ' ' + room.floor + 'F' },
+    { k: '建筑面积', v: room.area + ' ㎡', num: true },
+    { k: '房源类型', v: room.type },
+    { k: '住户 / 租户', v: room.tenant || '— 暂无（待招商）' },
+    { k: '租金单价', v: room.tenant ? room.price + ' 元/㎡/天' : '—', num: true },
+    { k: '月租金（估）', v: room.tenant ? Math.round(room.area * room.price * 30).toLocaleString() + ' 元' : '—', num: true },
+    { k: '合同到期', v: room.contractEnd || '—', num: true },
+    { k: '欠费金额', v: room.debt > 0 ? room.debt.toLocaleString() + ' 元' : '无欠费', num: true, warn: room.debt > 0 },
+  ];
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(150,185,225,.45)', backdropFilter: 'blur(2px)' }} onClick={onClose}>
+      <div className="glass flex flex-col" style={{ width: 560, borderRadius: 10 }} onClick={(e) => e.stopPropagation()}>
+        <div className="card-title">
+          <span className="dot" style={{ background: col, boxShadow: '0 0 8px ' + col }}></span>
+          <h3>房屋画像 · {room.building.replace(' ', '')} {room.name}</h3>
+          <span className="title-en">Room Profile</span>
+          <button onClick={onClose}
+            className="ml-auto w-7 h-7 rounded flex items-center justify-center text-[16px] transition hover:bg-white/10"
+            style={{ color: 'var(--txt-dim)' }}>✕</button>
+        </div>
+        <div className="px-5 py-4">
+          {/* 状态横幅 */}
+          <div className="flex items-center gap-3 px-4 py-3 rounded mb-3" style={{ background: 'rgba(20,60,110,.05)', border: '1px solid ' + col }}>
+            <span className="w-3 h-3 rounded-full" style={{ background: col, boxShadow: '0 0 8px ' + col }}></span>
+            <span className="text-[15px] font-bold" style={{ color: col }}>{room.status}</span>
+            {room.debt > 0 ? (
+              <span className="ml-auto num text-[14px] font-bold blink" style={{ color: 'var(--red)' }}>
+                欠费 {room.debt.toLocaleString()} 元
+              </span>
+            ) : null}
+          </div>
+          {/* 画像信息列表 */}
+          <div className="grid grid-cols-1 gap-1.5">
+            {rows.map((r) => (
+              <div key={r.k} className="flex items-center px-4 py-2.5 rounded" style={{ background: 'rgba(20,60,110,.05)' }}>
+                <span className="text-[13px] w-[120px] shrink-0" style={{ color: 'var(--txt-dim)' }}>{r.k}</span>
+                <span className={"text-[14px] font-medium " + (r.num ? 'num ' : '')}
+                  style={{ color: r.warn ? 'var(--red)' : 'var(--txt)' }}>{r.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoomStatus({ rooms, filter, setFilter, onPick }){
+  /* 客户端再过滤一次：在线时服务端已按 building 过滤，离线 mock 兜底时同样生效 */
+  const shown = rooms.filter((r) => filter === '全部' || r.building.replace(/\s/g, '') === filter);
+
+  /* 状态统计（图例数字） */
+  const statusCnt = { '已租': 0, '空置': 0, '欠费': 0, '过期': 0 };
+  shown.forEach((r) => { statusCnt[r.status] = (statusCnt[r.status] || 0) + 1; });
+
+  /* 类型占比（环形图数据） */
+  const typeMap = {};
+  shown.forEach((r) => { typeMap[r.type] = (typeMap[r.type] || 0) + 1; });
+  const typeData = Object.keys(typeMap).map((k) => ({ name: k, value: typeMap[k] }));
+
+  /* 按楼栋→楼层分组渲染网格 */
+  const byBuilding = {};
+  shown.forEach((r) => {
+    if (!byBuilding[r.building]) byBuilding[r.building] = {};
+    if (!byBuilding[r.building][r.floor]) byBuilding[r.building][r.floor] = [];
+    byBuilding[r.building][r.floor].push(r);
+  });
+  const buildings = Object.keys(byBuilding).sort();
+
+  return (
+    <div className="h-full flex gap-4">
+      {/* 左侧：筛选 + 图例 + 类型占比 */}
+      <div className="w-[360px] shrink-0 flex flex-col gap-4">
+        <GlowCard title="楼栋筛选" en="Filter" className="shrink-0">
+          <div className="grid grid-cols-4 gap-2">
+            {BUILDING_FILTERS.map((b) => (
+              <button key={b} onClick={() => setFilter(b)}
+                className="py-2 text-[14px] rounded-md transition"
+                style={filter === b
+                  ? { background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#fff', fontWeight: 700, boxShadow: '0 0 14px rgba(43,127,255,.4)' }
+                  : { color: 'var(--txt-dim)', border: '1px solid rgba(43,127,255,.3)' }}>
+                {b}
+              </button>
+            ))}
+          </div>
+        </GlowCard>
+
+        <GlowCard title="房态图例" en="Legend" className="shrink-0">
+          <div className="grid grid-cols-2 gap-2.5">
+            {Object.keys(STATUS_COLOR).map((s) => (
+              <div key={s} className="flex items-center gap-2.5 px-3 py-2.5 rounded" style={{ background: 'rgba(20,60,110,.05)' }}>
+                <span className="w-3.5 h-3.5 rounded-[3px]" style={{ background: STATUS_COLOR[s], boxShadow: '0 0 6px ' + STATUS_COLOR[s] }}></span>
+                <span className="text-[13px]" style={{ color: 'var(--txt)' }}>{s}</span>
+                <span className="num text-[17px] font-bold ml-auto" style={{ color: STATUS_COLOR[s] }}>{statusCnt[s] || 0}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-3 px-3 py-2 rounded" style={{ background: 'rgba(43,127,255,.08)' }}>
+            <span className="text-[13px]" style={{ color: 'var(--txt-dim)' }}>当前房源合计</span>
+            <span className="num text-[18px] font-bold" style={{ color: 'var(--cyan)' }}>{shown.length}<span className="text-[12px] ml-1 font-medium">间</span></span>
+          </div>
+        </GlowCard>
+
+        <GlowCard title="类型占比" en="By Type" className="flex-1 min-h-0" bodyClass="flex flex-col items-center justify-center gap-3">
+          <PieChart width={200} height={200}>
+            <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+              innerRadius={60} outerRadius={88} startAngle={90} endAngle={-270} stroke="none" paddingAngle={3}>
+              {typeData.map((t, i) => (
+                <Cell key={i} fill={TYPE_COLORS[i % TYPE_COLORS.length]}
+                  style={{ filter: 'drop-shadow(0 0 5px ' + TYPE_COLORS[i % TYPE_COLORS.length] + ')' }} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(v) => v + ' 间'} />
+          </PieChart>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+            {typeData.map((t, i) => (
+              <div key={t.name} className="flex items-center gap-1.5 text-[12px]">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: TYPE_COLORS[i % TYPE_COLORS.length] }}></span>
+                <span style={{ color: 'var(--txt)' }}>{t.name}</span>
+                <span className="num font-bold" style={{ color: TYPE_COLORS[i % TYPE_COLORS.length] }}>{t.value}</span>
+              </div>
+            ))}
+          </div>
+        </GlowCard>
+      </div>
+
+      {/* 右侧：房态色块网格（按楼栋→楼层分组） */}
+      <GlowCard title="房态网格" en="Room Status Grid"
+        extra={<span className="text-[12px]" style={{ color: 'var(--txt-dim)' }}>点击房间查看房屋画像</span>}
+        className="flex-1 min-w-0" bodyClass="overflow-y-auto scrollbar">
+        {buildings.map((b) => (
+          <div key={b} className="mb-4 last:mb-0">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-1.5 h-4 rounded-sm" style={{ background: 'var(--cyan)', boxShadow: '0 0 6px var(--cyan)' }}></span>
+              <span className="text-[15px] font-bold" style={{ color: 'var(--txt)' }}>{b}</span>
+            </div>
+            {Object.keys(byBuilding[b]).map(Number).sort((x, y) => y - x).map((f) => (
+              <div key={f} className="flex items-center gap-2.5 mb-2">
+                <span className="num text-[12px] w-7 text-right shrink-0" style={{ color: 'var(--txt-dim)' }}>{f}F</span>
+                <div className="flex flex-wrap gap-2 flex-1">
+                  {byBuilding[b][f].map((r) => {
+                    const col = STATUS_COLOR[r.status];
+                    return (
+                      <button key={r.id} onClick={() => onPick(r)}
+                        className="text-left px-2.5 py-1.5 rounded-md transition hover:brightness-110 hover:scale-[1.03]"
+                        style={{
+                          width: 128, background: 'rgba(20,60,110,.05)',
+                          border: '1px solid ' + col, boxShadow: 'inset 0 0 14px rgba(20,60,110,.04), 0 0 6px ' + col + '44',
+                        }}>
+                        <div className="flex items-center justify-between">
+                          <span className="num text-[14px] font-bold" style={{ color: col }}>{r.name}</span>
+                          <span className="w-2 h-2 rounded-full" style={{ background: col, boxShadow: '0 0 6px ' + col }}></span>
+                        </div>
+                        <div className="text-[11px] truncate mt-0.5" style={{ color: 'var(--txt-dim)' }}>
+                          {r.tenant || '待招商'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 3：租约管理
+   ============================================================ */
+const LEASE_STATUS_COLOR = { '履约中': 'var(--green)', '即将到期': 'var(--orange)', '已逾期': 'var(--red)' };
+
+function LeaseManage({ leases }){
+  const expiring = leases.filter((l) => l.expireDays > 0 && l.expireDays <= 90).length;
+  const overdue  = leases.filter((l) => l.status === '已逾期').length;
+  const active   = leases.filter((l) => l.status === '履约中').length;
+  const totalRent = leases.reduce((s, l) => s + l.monthlyRent, 0);
+
+  const stats = [
+    { label: '在管租约',       value: leases.length, unit: '份',   color: '#2b7fff' },
+    { label: '履约中',         value: active,        unit: '份',   color: '#1fa85f' },
+    { label: '90 天内到期',    value: expiring,      unit: '份',   color: '#ef8326', blink: expiring > 0 },
+    { label: '已逾期',         value: overdue,       unit: '份',   color: '#e24550', blink: overdue > 0 },
+    { label: '月租金合计',     value: totalRent.toLocaleString(), unit: '元', color: '#0a93c9' },
+  ];
+
+  return (
+    <div className="h-full flex flex-col gap-4">
+      {/* 到期提醒统计条 */}
+      <div className="grid grid-cols-5 gap-4 shrink-0">
+        {stats.map((s, i) => (
+          <div key={i} className="glass kpi l r flex items-center justify-center gap-3 py-4" style={{ '--accent': s.color }}>
+            <div className={"num text-[32px] font-bold leading-none glow-text" + (s.blink ? ' blink' : '')} style={{ color: s.color }}>
+              {s.value}<span className="text-[13px] ml-1 font-medium">{s.unit}</span>
+            </div>
+            <div className="text-[13px]" style={{ color: 'var(--txt-dim)' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 租约表格 */}
+      <GlowCard title="租约列表" en="Lease Contracts"
+        extra={<span className="text-[12px]" style={{ color: 'var(--orange)' }}>◆ 90 天内到期租约高亮提醒</span>}
+        className="flex-1 min-h-0" bodyClass="overflow-y-auto scrollbar">
+        <table className="w-full text-[13px]" style={{ borderCollapse: 'separate', borderSpacing: '0 7px' }}>
+          <thead>
+            <tr style={{ color: 'var(--txt-dim)' }} className="text-left text-[12px]">
+              <th className="px-3 font-medium">合同编号</th>
+              <th className="px-3 font-medium">租约名称</th>
+              <th className="px-3 font-medium">租户 / 联系方式</th>
+              <th className="px-3 font-medium">房源</th>
+              <th className="px-3 font-medium">租期</th>
+              <th className="px-3 font-medium w-[170px]">租期进度</th>
+              <th className="px-3 font-medium">月租金 (元)</th>
+              <th className="px-3 font-medium w-[150px]">缴纳进度</th>
+              <th className="px-3 font-medium">状态</th>
+              <th className="px-3 font-medium text-right">到期提醒</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leases.map((l) => {
+              const warn = l.expireDays <= 90;                 /* ≤90 天（含已逾期）整行高亮提醒 */
+              const sc = LEASE_STATUS_COLOR[l.status] || 'var(--blue)';
+              return (
+                <tr key={l.id} style={{
+                  background: warn ? 'rgba(239,131,38,.1)' : 'rgba(20,60,110,.05)',
+                  boxShadow: warn ? 'inset 2px 0 0 var(--orange)' : 'none',
+                }}>
+                  <td className="px-3 py-3 num rounded-l" style={{ color: 'var(--cyan)' }}>{l.id}</td>
+                  <td className="px-3 py-3" style={{ color: 'var(--txt)' }}>{l.name}</td>
+                  <td className="px-3 py-3">
+                    <div style={{ color: 'var(--txt)' }}>{l.tenant}</div>
+                    <div className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>{l.contact}</div>
+                  </td>
+                  <td className="px-3 py-3" style={{ color: 'var(--txt)' }}>{l.room}</td>
+                  <td className="px-3 py-3 num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{l.start}<br/>{l.end}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><ProgressBar pct={l.termProgress} color="#2b7fff" h={7} /></div>
+                      <span className="num text-[12px] font-bold w-[38px] text-right" style={{ color: 'var(--blue)' }}>{l.termProgress}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 num font-bold" style={{ color: 'var(--txt)' }}>{l.monthlyRent.toLocaleString()}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1"><ProgressBar pct={l.paidProgress} color={l.paidProgress >= 100 ? '#1fa85f' : '#ef8326'} h={7} /></div>
+                      <span className="num text-[12px] font-bold w-[38px] text-right"
+                        style={{ color: l.paidProgress >= 100 ? 'var(--green)' : 'var(--orange)' }}>{l.paidProgress}%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3"><Badge text={l.status} color={sc} /></td>
+                  <td className="px-3 py-3 rounded-r text-right">
+                    {l.expireDays < 0
+                      ? <span className="num text-[13px] font-bold blink" style={{ color: 'var(--red)' }}>已逾期 {-l.expireDays} 天</span>
+                      : warn
+                        ? <span className="num text-[13px] font-bold" style={{ color: 'var(--orange)' }}>剩 {l.expireDays} 天</span>
+                        : <span className="num text-[13px]" style={{ color: 'var(--txt-dim)' }}>剩 {l.expireDays} 天</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   应用根组件
+   ============================================================ */
+const TABS = [
+  { key: 'stats',  label: '楼宇统计' },
+  { key: 'rooms',  label: '房态展示' },
+  { key: 'leases', label: '租约管理' },
+];
+
+function App(){
+  const [now, setNow] = useState(() => new Date());
+  const [tab, setTab] = useState('stats');
+  const [filter, setFilter] = useState('全部');           // 房态展示的楼栋筛选
+  const [picked, setPicked] = useState(null);             // 房屋画像 Modal 选中房间
+
+  /* 初始 mock 兜底数据（形状与接口返回一致，fetch 失败时静默使用） */
+  const [ov, setOv] = useState(mockOverview);
+  const [rooms, setRooms] = useState(mockRooms);
+  const [leases, setLeases] = useState(mockLeases);
+
+  /* 时钟：每秒更新 */
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* overview：每 5 秒轮询（相对路径，失败静默） */
+  useEffect(() => {
+    const load = () => {
+      fetch('api/v1/operation/overview')
+        .then((r) => r.json())
+        .then((d) => { if (d && d.buildings) setOv(d); })
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* rooms：房态 Tab 激活或楼栋筛选变化时拉取；「全部」不带 building 参数 */
+  useEffect(() => {
+    if (tab !== 'rooms') return;
+    const url = filter === '全部'
+      ? 'api/v1/operation/rooms'
+      : 'api/v1/operation/rooms?building=' + encodeURIComponent(filter);
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setRooms(d); })
+      .catch(() => {});
+  }, [tab, filter]);
+
+  /* leases：租约 Tab 激活时拉取 */
+  useEffect(() => {
+    if (tab !== 'leases') return;
+    fetch('api/v1/operation/leases')
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d)) setLeases(d); })
+      .catch(() => {});
+  }, [tab]);
+
+  return (
+    <div className="h-full flex flex-col">
+      <TopBar now={now} />
+
+      {/* Tab 切换条 */}
+      <div className="flex items-center justify-center gap-3 py-3 shrink-0">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className="px-8 py-2 text-[15px] rounded-md transition tracking-[2px]"
+            style={tab === t.key
+              ? { background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#fff', fontWeight: 700, boxShadow: '0 0 16px rgba(43,127,255,.45)' }
+              : { color: 'var(--txt-dim)', border: '1px solid rgba(43,127,255,.3)', background: 'rgba(255,255,255,.12)' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 内容区 */}
+      <div className="flex-1 min-h-0 px-5 pb-5">
+        {tab === 'stats'  ? <BuildingStats ov={ov} /> : null}
+        {tab === 'rooms'  ? <RoomStatus rooms={rooms} filter={filter} setFilter={setFilter} onPick={setPicked} /> : null}
+        {tab === 'leases' ? <LeaseManage leases={leases} /> : null}
+      </div>
+
+      {/* 房屋画像弹窗 */}
+      <RoomModal room={picked} onClose={() => setPicked(null)} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

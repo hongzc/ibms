@@ -37,7 +37,7 @@ func (h *userHandler) create(c *gin.Context) {
 }
 
 func (h *userHandler) get(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := strconv.ParseInt(c.Query("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return

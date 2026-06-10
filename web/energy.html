@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>能源管理 — IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  /* ===== 与主屏 index.html 完全一致的设计系统 ===== */
+  :root{
+    --bg-0:#bcd9fb;
+    --bg-1:#d8eaff;
+    --cyan:#0a93c9;
+    --blue:#2b7fff;
+    --magenta:#e23a82;
+    --violet:#8a4fd6;
+    --orange:#ef8326;
+    --red:#e24550;
+    --green:#1fa85f;
+    --txt:#123c6e;
+    --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:#cfe4ff; overflow:hidden; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+
+  /* ---- 1920x1080 缩放舞台 ---- */
+  #stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1300px 760px at 50% -12%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    overflow:hidden;
+  }
+  #stage{
+    width:1920px; height:1080px; position:relative;
+    transform-origin:center center;
+    background:
+      radial-gradient(1500px 880px at 50% 4%, #eaf4ff 0%, transparent 56%),
+      linear-gradient(180deg,#9ec6f2 0%,#bcd9fb 48%,#d8eaff 100%);
+  }
+  #root{ width:1920px; height:1080px; }
+
+  /* ---- 玻璃拟态卡片（带四角高亮） ---- */
+  .glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(220,238,255,.08));
+    border:1px solid rgba(120,170,230,.32);
+    border-radius:8px;
+    box-shadow:0 6px 26px rgba(60,110,180,0.1), inset 0 1px 0 rgba(255,255,255,.5);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  }
+  .glass::before,.glass::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color:var(--cyan); opacity:.85;
+  }
+  .glass::before{ left:-1px; top:-1px; border-left:2px solid; border-top:2px solid; border-top-left-radius:8px; }
+  .glass::after{ right:-1px; bottom:-1px; border-right:2px solid; border-bottom:2px solid; border-bottom-right-radius:8px; }
+
+  /* ---- 卡片标题（菱形 dot + 英文小字） ---- */
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 14px 8px; position:relative;
+  }
+  .card-title .dot{ width:7px; height:7px; transform:rotate(45deg); background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .card-title h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:1px; color:#0e3a72; }
+  .card-title::after{
+    content:""; position:absolute; left:14px; right:14px; bottom:0; height:1px;
+    background:linear-gradient(90deg, var(--cyan), rgba(43,127,255,0) 70%);
+  }
+  .title-en{ font-size:10px; color:var(--txt-dim); letter-spacing:2px; text-transform:uppercase; font-family:'Oxanium'; }
+
+  .glow-text{ text-shadow:0 1px 1px rgba(255,255,255,.55); }
+  .scrollbar::-webkit-scrollbar{ width:6px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.35); border-radius:3px; }
+  .scrollbar::-webkit-scrollbar-track{ background:transparent; }
+
+  .glitch{ position:relative; color:#0e3a72;
+    text-shadow:0 2px 10px rgba(255,255,255,.7), 1px 0 rgba(43,127,255,.25); }
+
+  @keyframes blink{ 0%,100%{ opacity:1;} 50%{ opacity:.25;} }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+
+  .recharts-default-tooltip{ background:rgba(255,255,255,.95)!important; border:1px solid var(--line)!important; border-radius:6px!important; }
+  .recharts-tooltip-label,.recharts-tooltip-item{ color:#123c6e!important; }
+
+  /* ---- Tab 与切换按钮 ---- */
+  .tab-btn{
+    padding:8px 26px; font-size:15px; font-weight:700; letter-spacing:2px;
+    color:var(--txt-dim); border:1px solid rgba(43,127,255,.28); border-radius:6px;
+    background:rgba(255,255,255,.12); cursor:pointer; transition:all .2s ease;
+  }
+  .tab-btn:hover{ color:var(--txt); }
+  .tab-btn.on{
+    color:#fff; background:linear-gradient(135deg,#2b7fff,#0a93c9);
+    border-color:transparent; box-shadow:0 0 14px rgba(43,127,255,.55);
+  }
+  .seg-btn{
+    padding:4px 14px; font-size:12px; color:var(--txt-dim);
+    border:1px solid rgba(43,127,255,.28); cursor:pointer;
+    background:rgba(255,255,255,.1); transition:all .2s ease;
+  }
+  .seg-btn:first-child{ border-radius:5px 0 0 5px; }
+  .seg-btn:last-child{ border-radius:0 5px 5px 0; }
+  .seg-btn + .seg-btn{ border-left:none; }
+  .seg-btn.on{
+    color:#fff; background:linear-gradient(135deg,#2b7fff,#0a93c9);
+    border-color:transparent; box-shadow:0 0 10px rgba(43,127,255,.45);
+  }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage"><div id="root"></div></div>
+  </div>
+
+  <script>
+    // 静默 recharts 2.x 已知无害的 defaultProps 弃用告警（XAxis/YAxis）
+    (function(){
+      var _err = console.error;
+      console.error = function(){
+        var m = arguments[0];
+        if (typeof m === 'string' && m.indexOf('defaultProps') !== -1) return;
+        return _err.apply(console, arguments);
+      };
+    })();
+    // ---- 1920x1080 舞台等比缩放 ----
+    function fitStage(){
+      var s = document.getElementById('stage');
+      var scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitStage);
+    fitStage();
+  </script>
+
+  <script type="text/babel">
+/* ============================================================
+   IBMS 能源管理子系统页面
+   Tab：系统态势 / 能耗分析 / 仪表监测 / 抄表记录
+   ============================================================ */
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+const {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, AreaChart, Area,
+} = Recharts;
+
+/* ---------- 通用工具 ---------- */
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+function fmt(n){ return n == null ? '--' : Number(n).toLocaleString('zh-CN'); }
+
+const axisStyle = { fontSize: 11, fontFamily: 'Oxanium', fill: '#6f93b8' };
+// 环形图 / 排行 配色盘
+const PALETTE = ['#2b7fff', '#0a93c9', '#8a4fd6', '#ef8326', '#1fa85f', '#e23a82'];
+
+/* ---------- 自测量容器（替代 ResponsiveContainer，避免 transform:scale 下 ResizeObserver 不触发） ---------- */
+function AutoBox({ children }){
+  const ref = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+      setSize((p) => (p.w === w && p.h === h) ? p : { w, h });
+    };
+    measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 60);
+    return () => { ro && ro.disconnect(); window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {size.w > 0 && size.h > 0 ? children(size.w, size.h) : null}
+    </div>
+  );
+}
+
+/* ---------- 玻璃卡片外壳（与主屏同款） ---------- */
+function GlowCard({ title, en, extra, children, className, bodyClass }){
+  return (
+    <div className={"glass flex flex-col " + (className || "")}>
+      <div className="card-title">
+        <span className="dot"></span>
+        <h3>{title}</h3>
+        {en ? <span className="title-en">{en}</span> : null}
+        <div className="ml-auto">{extra}</div>
+      </div>
+      <div className={"flex-1 min-h-0 px-3.5 pb-3 pt-2 " + (bodyClass || "")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 分段切换按钮组 ---------- */
+function SegSwitch({ options, value, onChange }){
+  return (
+    <div className="flex">
+      {options.map((o) => (
+        <button key={o.v} className={"seg-btn" + (value === o.v ? " on" : "")}
+          onClick={() => onChange(o.v)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- 涨跌徽标（invert: 数值下降为好） ---------- */
+function Delta({ delta, size }){
+  if (delta == null) return null;
+  const up = delta >= 0;
+  // 能耗场景：下降为好（绿色），上升为预警（橙色）
+  const col = Math.abs(delta) < 0.05 ? 'var(--txt-dim)' : (up ? 'var(--orange)' : 'var(--green)');
+  return (
+    <span className="num inline-flex items-center gap-0.5 font-semibold" style={{ color: col, fontSize: size || 11 }}>
+      {up ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
+    </span>
+  );
+}
+
+/* ============================================================
+   Mock 兜底数据（形状与接口返回完全一致，fetch 失败时静默使用）
+   ============================================================ */
+
+/* ---- GET api/v1/energy/overview ---- */
+const MOCK_OVERVIEW = {
+  elec:  { today: 4286, predict: 6120, yesterday: 5980, month: 128600, lastMonth: 135400, year: 1486000, unit: 'kWh' },
+  water: { today: 312,  predict: 450,  yesterday: 438,  month: 9620,   lastMonth: 10100,  year: 112000,  unit: 'm³' },
+  // 24 小时双线趋势（电 kWh / 水 m³）
+  trend24h: [
+    { t: '00:00', elec: 142, water: 8.2 },  { t: '01:00', elec: 128, water: 7.1 },
+    { t: '02:00', elec: 121, water: 6.4 },  { t: '03:00', elec: 118, water: 6.0 },
+    { t: '04:00', elec: 124, water: 6.6 },  { t: '05:00', elec: 139, water: 7.8 },
+    { t: '06:00', elec: 168, water: 10.5 }, { t: '07:00', elec: 215, water: 14.2 },
+    { t: '08:00', elec: 286, water: 18.6 }, { t: '09:00', elec: 342, water: 21.4 },
+    { t: '10:00', elec: 368, water: 22.8 }, { t: '11:00', elec: 354, water: 23.6 },
+    { t: '12:00', elec: 312, water: 25.1 }, { t: '13:00', elec: 336, water: 22.0 },
+    { t: '14:00', elec: 371, water: 21.2 }, { t: '15:00', elec: 366, water: 20.5 },
+    { t: '16:00', elec: 348, water: 19.8 }, { t: '17:00', elec: 322, water: 18.4 },
+    { t: '18:00', elec: 276, water: 16.9 }, { t: '19:00', elec: 238, water: 14.7 },
+    { t: '20:00', elec: 212, water: 12.5 }, { t: '21:00', elec: 186, water: 10.8 },
+    { t: '22:00', elec: 164, water: 9.4 },  { t: '23:00', elec: 150, water: 8.6 },
+  ],
+  // 能耗排行（分项）
+  rank: [
+    { name: '空调', v: 540 }, { name: '动力', v: 410 }, { name: '照明', v: 320 },
+    { name: '电梯', v: 180 }, { name: '其他', v: 130 },
+  ],
+};
+
+/* ---- GET api/v1/energy/analysis 兜底（dim=item & period=day 形状） ---- */
+const MOCK_ANALYSIS = {
+  // 同比环比（current 本期 / previous 上期 / yoy 同比 / mom 环比）
+  compare: [
+    { name: '空调', current: 540, previous: 588, yoy: -8.2, mom: 3.1 },
+    { name: '动力', current: 410, previous: 386, yoy: 6.2,  mom: 1.8 },
+    { name: '照明', current: 320, previous: 342, yoy: -6.4, mom: -2.3 },
+    { name: '电梯', current: 180, previous: 171, yoy: 5.3,  mom: 0.9 },
+    { name: '其他', current: 130, previous: 144, yoy: -9.7, mom: -4.1 },
+  ],
+  // 分项占比
+  share: [
+    { name: '空调', v: 540 }, { name: '动力', v: 410 }, { name: '照明', v: 320 },
+    { name: '电梯', v: 180 }, { name: '其他', v: 130 },
+  ],
+  // 近 7 日 本期 / 上期 对比
+  recent: [
+    { t: '06-04', current: 5430, previous: 5210 },
+    { t: '06-05', current: 5680, previous: 5490 },
+    { t: '06-06', current: 5120, previous: 5380 },
+    { t: '06-07', current: 4860, previous: 5040 },
+    { t: '06-08', current: 5240, previous: 5160 },
+    { t: '06-09', current: 5980, previous: 5720 },
+    { t: '06-10', current: 4286, previous: 5310 },
+  ],
+};
+
+/* ---- GET api/v1/energy/meters 兜底（12+ 块表具，电表 + 水表） ---- */
+const MOCK_METERS = [
+  { id: 'EM-A3-01', name: 'A栋3F 照明电表', kind: '电表', zone: 'A栋 3F',  status: '正常', params: { voltage: 226.5, current: 18.4, power: 4.1,  flow: null }, reading: 48652.6 },
+  { id: 'EM-A5-02', name: 'A栋5F 空调电表', kind: '电表', zone: 'A栋 5F',  status: '正常', params: { voltage: 224.8, current: 36.2, power: 8.1,  flow: null }, reading: 96241.3 },
+  { id: 'EM-A8-03', name: 'A栋8F 动力电表', kind: '电表', zone: 'A栋 8F',  status: '正常', params: { voltage: 228.1, current: 25.6, power: 5.8,  flow: null }, reading: 63108.9 },
+  { id: 'EM-B2-01', name: 'B栋2F 照明电表', kind: '电表', zone: 'B栋 2F',  status: '正常', params: { voltage: 225.3, current: 14.7, power: 3.3,  flow: null }, reading: 35460.2 },
+  { id: 'EM-B6-02', name: 'B栋6F 空调电表', kind: '电表', zone: 'B栋 6F',  status: '故障', params: { voltage: 0,     current: 0,    power: 0,    flow: null }, reading: 81235.7 },
+  { id: 'EM-B9-03', name: 'B栋9F 动力电表', kind: '电表', zone: 'B栋 9F',  status: '正常', params: { voltage: 227.4, current: 22.1, power: 5.0,  flow: null }, reading: 57892.4 },
+  { id: 'EM-C1-01', name: 'C栋1F 商业电表', kind: '电表', zone: 'C栋 1F',  status: '正常', params: { voltage: 226.0, current: 42.8, power: 9.6,  flow: null }, reading: 118540.6 },
+  { id: 'EM-C4-02', name: 'C栋4F 办公电表', kind: '电表', zone: 'C栋 4F',  status: '正常', params: { voltage: 225.9, current: 19.3, power: 4.3,  flow: null }, reading: 46721.8 },
+  { id: 'EM-G1-01', name: '地下室 电梯电表', kind: '电表', zone: '地下室 B1', status: '正常', params: { voltage: 380.2, current: 28.5, power: 10.8, flow: null }, reading: 72415.0 },
+  { id: 'EM-G1-02', name: '地下室 风机电表', kind: '电表', zone: '地下室 B1', status: '离线', params: { voltage: 0,    current: 0,    power: 0,    flow: null }, reading: 28634.5 },
+  { id: 'WM-A1-01', name: 'A栋 总进水表',   kind: '水表', zone: 'A栋 1F',  status: '正常', params: { voltage: null, current: null, power: null, flow: 3.6 }, reading: 18642.8 },
+  { id: 'WM-B1-01', name: 'B栋 总进水表',   kind: '水表', zone: 'B栋 1F',  status: '正常', params: { voltage: null, current: null, power: null, flow: 2.8 }, reading: 14237.5 },
+  { id: 'WM-C1-01', name: 'C栋 总进水表',   kind: '水表', zone: 'C栋 1F',  status: '正常', params: { voltage: null, current: null, power: null, flow: 4.2 }, reading: 21864.3 },
+  { id: 'WM-G1-01', name: '地下室 消防水表', kind: '水表', zone: '地下室 B1', status: '正常', params: { voltage: null, current: null, power: null, flow: 0.3 }, reading: 3218.6 },
+];
+
+/* ---- GET api/v1/energy/readings?days=7 兜底（近 7 天抄表记录） ---- */
+const MOCK_READINGS = [
+  { meter: 'EM-A3-01', kind: '电表', start: 48420.1, end: 48652.6, usage: 232.5, date: '2026-06-09' },
+  { meter: 'EM-A5-02', kind: '电表', start: 95830.6, end: 96241.3, usage: 410.7, date: '2026-06-09' },
+  { meter: 'WM-A1-01', kind: '水表', start: 18598.4, end: 18642.8, usage: 44.4,  date: '2026-06-09' },
+  { meter: 'EM-A3-01', kind: '电表', start: 48196.3, end: 48420.1, usage: 223.8, date: '2026-06-08' },
+  { meter: 'EM-B9-03', kind: '电表', start: 57680.2, end: 57892.4, usage: 212.2, date: '2026-06-08' },
+  { meter: 'WM-B1-01', kind: '水表', start: 14199.1, end: 14237.5, usage: 38.4,  date: '2026-06-08' },
+  { meter: 'EM-A3-01', kind: '电表', start: 47961.8, end: 48196.3, usage: 234.5, date: '2026-06-07' },
+  { meter: 'EM-C1-01', kind: '电表', start: 118102.4, end: 118540.6, usage: 438.2, date: '2026-06-07' },
+  { meter: 'WM-C1-01', kind: '水表', start: 21812.9, end: 21864.3, usage: 51.4,  date: '2026-06-07' },
+  { meter: 'EM-A3-01', kind: '电表', start: 47742.6, end: 47961.8, usage: 219.2, date: '2026-06-06' },
+  { meter: 'EM-G1-01', kind: '电表', start: 72101.7, end: 72415.0, usage: 313.3, date: '2026-06-06' },
+  { meter: 'EM-A3-01', kind: '电表', start: 47515.2, end: 47742.6, usage: 227.4, date: '2026-06-05' },
+  { meter: 'WM-A1-01', kind: '水表', start: 18552.0, end: 18598.4, usage: 46.4,  date: '2026-06-05' },
+  { meter: 'EM-A3-01', kind: '电表', start: 47289.5, end: 47515.2, usage: 225.7, date: '2026-06-04' },
+  { meter: 'EM-B2-01', kind: '电表', start: 35275.6, end: 35460.2, usage: 184.6, date: '2026-06-04' },
+  { meter: 'EM-A3-01', kind: '电表', start: 47058.1, end: 47289.5, usage: 231.4, date: '2026-06-03' },
+  { meter: 'WM-G1-01', kind: '水表', start: 3211.2,  end: 3218.6,  usage: 7.4,   date: '2026-06-03' },
+];
+
+/* ============================================================
+   顶栏：返回综合态势 + 居中大标题 + 右侧实时时间
+   ============================================================ */
+function TopBar({ now }){
+  const date = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+  return (
+    <div className="relative h-[74px] flex items-center px-5 shrink-0">
+      {/* 装饰底线 */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(43,127,255,.5),transparent)' }}></div>
+
+      {/* 左：返回综合态势 */}
+      <div className="w-[420px]">
+        <a href="./" className="inline-flex items-center gap-2 glass px-4 py-2 text-[14px] font-medium transition hover:bg-white/10"
+          style={{ color: 'var(--txt)', borderRadius: 8, textDecoration: 'none' }}>
+          <span style={{ color: 'var(--cyan)' }}>⟵</span> 综合态势
+        </a>
+      </div>
+
+      {/* 中：标题 */}
+      <div className="flex-1 flex flex-col items-center justify-center -mt-1">
+        <h1 className="text-[34px] font-black tracking-[6px] glitch">能源管理</h1>
+        <div className="num text-[11px] tracking-[5px]" style={{ color: 'var(--txt-dim)' }}>
+          ENERGY MANAGEMENT SYSTEM
+        </div>
+      </div>
+
+      {/* 右：实时时间（每秒更新） */}
+      <div className="w-[420px] flex justify-end">
+        <div className="leading-tight text-right">
+          <div className="num text-[22px] font-bold" style={{ color: 'var(--cyan)' }}>{time}</div>
+          <div className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{date} {week}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 1：系统态势（电/水切换 + 6 KPI + 24h 双线趋势 + 能耗排行）
+   ============================================================ */
+
+/* ---- KPI 卡片 ---- */
+function KpiCard({ label, en, value, unit, color, hint, blink }){
+  return (
+    <div className="glass flex-1 flex flex-col justify-center px-5 py-3">
+      <div className="flex items-center gap-2">
+        <span className={"w-1.5 h-1.5 rounded-full" + (blink ? " blink" : "")} style={{ background: color, boxShadow: '0 0 6px ' + color }}></span>
+        <span className="text-[13px]" style={{ color: 'var(--txt)' }}>{label}</span>
+        <span className="title-en">{en}</span>
+      </div>
+      <div className="num text-[30px] font-bold leading-none glow-text mt-2.5" style={{ color }}>
+        {fmt(value)}<span className="text-[13px] ml-1 font-medium" style={{ color: 'var(--txt-dim)' }}>{unit}</span>
+      </div>
+      <div className="mt-2">{hint}</div>
+    </div>
+  );
+}
+
+function OverviewTab({ ov }){
+  const [kind, setKind] = useState('elec');                       // 电 / 水 切换
+  const cur = ov[kind];
+  const color = kind === 'elec' ? 'var(--blue)' : 'var(--cyan)';
+  // 环比提示：今日 vs 昨日 / 本月 vs 上月
+  const dDay = cur.yesterday ? ((cur.today - cur.yesterday) / cur.yesterday) * 100 : 0;
+  const dMonth = cur.lastMonth ? ((cur.month - cur.lastMonth) / cur.lastMonth) * 100 : 0;
+  const rankMax = Math.max(...ov.rank.map((r) => r.v), 1);
+  const rankTotal = ov.rank.reduce((a, b) => a + b.v, 0);
+
+  return (
+    <div className="h-full flex flex-col gap-3">
+      {/* 电 / 水 切换 */}
+      <div className="flex items-center justify-between shrink-0">
+        <SegSwitch value={kind} onChange={setKind}
+          options={[{ v: 'elec', label: '⚡ 电能' }, { v: 'water', label: '💧 水量' }]} />
+        <span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>单位：{cur.unit} · 每 5 秒刷新</span>
+      </div>
+
+      {/* 6 个 KPI 卡：今日实时 / 预计全天 / 昨日 / 本月 / 上月 / 本年 */}
+      <div className="flex gap-3 shrink-0" style={{ height: 136 }}>
+        <KpiCard label="今日实时" en="Today" value={cur.today} unit={cur.unit} color={color} blink
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>较昨日 <Delta delta={dDay} /></span>} />
+        <KpiCard label="预计全天" en="Predict" value={cur.predict} unit={cur.unit} color="var(--violet)"
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>AI 负荷预测</span>} />
+        <KpiCard label="昨日" en="Yesterday" value={cur.yesterday} unit={cur.unit} color="var(--txt)"
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>昨日全天累计</span>} />
+        <KpiCard label="本月" en="Month" value={cur.month} unit={cur.unit} color="var(--green)"
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>较上月 <Delta delta={dMonth} /></span>} />
+        <KpiCard label="上月" en="Last Month" value={cur.lastMonth} unit={cur.unit} color="var(--orange)"
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>上月全月累计</span>} />
+        <KpiCard label="本年" en="Year" value={cur.year} unit={cur.unit} color="var(--magenta)"
+          hint={<span className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>年度累计用量</span>} />
+      </div>
+
+      {/* 下方：24h 双线趋势大图 + 右侧能耗排行 */}
+      <div className="flex-1 min-h-0 flex gap-3">
+        <GlowCard title="水电 24 小时趋势" en="24H Trend" className="flex-1"
+          extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+            <span style={{ color: 'var(--blue)' }}>━ 电 kWh</span>　<span style={{ color: 'var(--cyan)' }}>━ 水 m³</span>
+          </span>}>
+          <AutoBox>{(w, h) => (
+            <LineChart width={w} height={h} data={ov.trend24h} margin={{ top: 8, right: 6, bottom: 0, left: -14 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,127,255,.16)" />
+              <XAxis dataKey="t" tick={axisStyle} tickLine={false} axisLine={{ stroke: 'rgba(43,127,255,.3)' }} interval={1} />
+              <YAxis yAxisId="e" tick={axisStyle} tickLine={false} axisLine={false} />
+              <YAxis yAxisId="w" orientation="right" tick={axisStyle} tickLine={false} axisLine={false} width={44} />
+              <Tooltip />
+              <Line yAxisId="e" type="monotone" dataKey="elec" name="电 (kWh)" stroke="#2b7fff" strokeWidth={2.4}
+                dot={false} activeDot={{ r: 4 }} style={{ filter: 'drop-shadow(0 0 4px #2b7fff)' }} />
+              <Line yAxisId="w" type="monotone" dataKey="water" name="水 (m³)" stroke="#0a93c9" strokeWidth={2.4}
+                dot={false} activeDot={{ r: 4 }} strokeDasharray="6 3" style={{ filter: 'drop-shadow(0 0 4px #0a93c9)' }} />
+            </LineChart>
+          )}</AutoBox>
+        </GlowCard>
+
+        <GlowCard title="能耗排行" en="Ranking" className="w-[520px] shrink-0"
+          extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>合计 <b style={{ color: 'var(--cyan)' }}>{fmt(rankTotal)}</b> kWh</span>}>
+          <AutoBox>{(w, h) => (
+            <BarChart width={w} height={h} data={ov.rank} layout="vertical" margin={{ top: 6, right: 44, bottom: 0, left: 4 }} barSize={18}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,127,255,.14)" horizontal={false} />
+              <XAxis type="number" domain={[0, Math.ceil(rankMax * 1.15)]} tick={axisStyle} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 13, fill: '#123c6e' }} tickLine={false} axisLine={false} width={52} />
+              <Tooltip />
+              <Bar dataKey="v" name="能耗 (kWh)" radius={[0, 9, 9, 0]}
+                label={{ position: 'right', fontSize: 12, fontFamily: 'Oxanium', fill: '#123c6e' }}>
+                {ov.rank.map((_, i) => (
+                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} style={{ filter: 'drop-shadow(0 0 4px ' + PALETTE[i % PALETTE.length] + ')' }} />
+                ))}
+              </Bar>
+            </BarChart>
+          )}</AutoBox>
+        </GlowCard>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 2：能耗分析（维度 + 周期切换：同环比双柱 / 占比环形 / 本期上期对比）
+   ============================================================ */
+function AnalysisTab({ data, dim, setDim, period, setPeriod }){
+  const shareTotal = data.share.reduce((a, b) => a + b.v, 0);
+  const periodLabel = { day: '日', month: '月', year: '年' }[period];
+
+  return (
+    <div className="h-full flex flex-col gap-3">
+      {/* 工具条：维度 + 周期切换（切换即重新 fetch） */}
+      <div className="flex items-center gap-6 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px]" style={{ color: 'var(--txt-dim)' }}>分析维度</span>
+          <SegSwitch value={dim} onChange={setDim}
+            options={[{ v: 'item', label: '能源分项' }, { v: 'building', label: '建筑分区' }, { v: 'function', label: '功能分区' }]} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[13px]" style={{ color: 'var(--txt-dim)' }}>统计周期</span>
+          <SegSwitch value={period} onChange={setPeriod}
+            options={[{ v: 'day', label: '日' }, { v: 'month', label: '月' }, { v: 'year', label: '年' }]} />
+        </div>
+        <span className="num text-[11px] ml-auto" style={{ color: 'var(--txt-dim)' }}>dim={dim} · period={period}</span>
+      </div>
+
+      {/* 上排：同环比双柱图 + 占比环形图 */}
+      <div className="flex gap-3" style={{ height: '52%' }}>
+        <GlowCard title={'同比环比分析（本' + periodLabel + ' vs 上' + periodLabel + '）'} en="YoY / MoM" className="flex-[1.5]"
+          extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+            <span style={{ color: 'var(--blue)' }}>■ 本期</span>　<span style={{ color: '#9db8d8' }}>■ 上期</span>
+          </span>}>
+          <div className="h-full flex flex-col">
+            <div className="flex-1 min-h-0">
+              <AutoBox>{(w, h) => (
+                <BarChart width={w} height={h} data={data.compare} margin={{ top: 8, right: 8, bottom: 0, left: -14 }} barGap={5}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,127,255,.16)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 13, fill: '#123c6e' }} tickLine={false} axisLine={{ stroke: 'rgba(43,127,255,.3)' }} />
+                  <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="current" name="本期" fill="#2b7fff" radius={[5, 5, 0, 0]} barSize={26}
+                    style={{ filter: 'drop-shadow(0 0 4px #2b7fff)' }} />
+                  <Bar dataKey="previous" name="上期" fill="#9db8d8" radius={[5, 5, 0, 0]} barSize={26} />
+                </BarChart>
+              )}</AutoBox>
+            </div>
+            {/* 同比 / 环比徽标行 */}
+            <div className="flex shrink-0 pt-1.5" style={{ borderTop: '1px dashed rgba(43,127,255,.2)' }}>
+              {data.compare.map((c) => (
+                <div key={c.name} className="flex-1 text-center">
+                  <div className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>{c.name}</div>
+                  <div className="text-[11px] mt-0.5">同比 <Delta delta={c.yoy} size={10} /></div>
+                  <div className="text-[11px]">环比 <Delta delta={c.mom} size={10} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </GlowCard>
+
+        <GlowCard title="分项占比" en="Share" className="flex-1">
+          <div className="h-full flex items-center">
+            <div className="flex-1 min-w-0 h-full relative">
+              <AutoBox>{(w, h) => (
+                <PieChart width={w} height={h}>
+                  <Pie data={data.share} dataKey="v" nameKey="name" cx="50%" cy="50%"
+                    innerRadius={Math.min(w, h) * 0.26} outerRadius={Math.min(w, h) * 0.4}
+                    paddingAngle={3} stroke="none" startAngle={90} endAngle={-270}>
+                    {data.share.map((_, i) => (
+                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} style={{ filter: 'drop-shadow(0 0 4px ' + PALETTE[i % PALETTE.length] + ')' }} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              )}</AutoBox>
+              {/* 环心合计 */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="num text-[24px] font-bold glow-text" style={{ color: 'var(--cyan)' }}>{fmt(shareTotal)}</div>
+                <div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>合计 kWh</div>
+              </div>
+            </div>
+            {/* 图例 */}
+            <div className="w-[150px] shrink-0 space-y-2 pr-1">
+              {data.share.map((s, i) => (
+                <div key={s.name} className="flex items-center justify-between text-[12px]">
+                  <span className="flex items-center gap-1.5" style={{ color: 'var(--txt)' }}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: PALETTE[i % PALETTE.length], boxShadow: '0 0 5px ' + PALETTE[i % PALETTE.length] }}></span>
+                    {s.name}
+                  </span>
+                  <span className="num font-semibold" style={{ color: PALETTE[i % PALETTE.length] }}>
+                    {shareTotal ? ((s.v / shareTotal) * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </GlowCard>
+      </div>
+
+      {/* 下排：本期 / 上期 对比面积图 */}
+      <GlowCard title={period === 'day' ? '近 7 日 本期 / 上期对比' : '近 30 期 本期 / 上期对比'} en="Current vs Previous" className="flex-1 min-h-0"
+        extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+          <span style={{ color: 'var(--blue)' }}>━ 本期</span>　<span style={{ color: 'var(--violet)' }}>━ 上期</span>
+        </span>}>
+        <AutoBox>{(w, h) => (
+          <AreaChart width={w} height={h} data={data.recent} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
+            <defs>
+              <linearGradient id="gCur" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2b7fff" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="#2b7fff" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="gPrev" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8a4fd6" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="#8a4fd6" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(43,127,255,.16)" vertical={false} />
+            <XAxis dataKey="t" tick={axisStyle} tickLine={false} axisLine={{ stroke: 'rgba(43,127,255,.3)' }} />
+            <YAxis tick={axisStyle} tickLine={false} axisLine={false} />
+            <Tooltip />
+            <Area type="monotone" dataKey="previous" name="上期" stroke="#8a4fd6" strokeWidth={2}
+              strokeDasharray="6 3" fill="url(#gPrev)" dot={false} />
+            <Area type="monotone" dataKey="current" name="本期" stroke="#2b7fff" strokeWidth={2.4}
+              fill="url(#gCur)" dot={false} activeDot={{ r: 4 }} style={{ filter: 'drop-shadow(0 0 4px #2b7fff)' }} />
+          </AreaChart>
+        )}</AutoBox>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 3：仪表监测（表具卡片网格：电压/电流/功率/流量 + 状态徽标）
+   ============================================================ */
+const METER_STATUS_COLOR = { '正常': 'var(--green)', '离线': '#6f93b8', '故障': 'var(--red)' };
+
+/* ---- 单个运行参数 ---- */
+function MeterParam({ label, value, unit }){
+  return (
+    <div className="rounded px-2 py-1.5" style={{ background: 'rgba(20,60,110,.06)' }}>
+      <div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>{label}</div>
+      <div className="num text-[16px] font-bold leading-tight" style={{ color: value == null ? 'var(--txt-dim)' : 'var(--cyan)' }}>
+        {value == null ? '--' : value}<span className="text-[9px] ml-0.5 font-medium" style={{ color: 'var(--txt-dim)' }}>{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+function MeterCard({ m }){
+  const col = METER_STATUS_COLOR[m.status] || 'var(--txt-dim)';
+  const isElec = m.kind === '电表';
+  return (
+    <div className="glass p-3 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[16px]">{isElec ? '⚡' : '💧'}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold truncate" style={{ color: 'var(--txt)' }}>{m.name}</div>
+          <div className="num text-[10px]" style={{ color: 'var(--txt-dim)' }}>{m.id} · {m.zone}</div>
+        </div>
+        {/* 状态徽标 */}
+        <span className="text-[11px] px-2 py-0.5 rounded-full shrink-0"
+          style={{ color: col, background: 'rgba(20,60,110,.07)', border: '1px solid ' + col }}>
+          <span className={m.status === '正常' ? 'blink' : ''}>●</span> {m.status}
+        </span>
+      </div>
+      {/* 实时参数：电表显示电压/电流/功率，水表显示流量 */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {isElec ? (
+          <React.Fragment>
+            <MeterParam label="电压" value={m.params.voltage} unit="V" />
+            <MeterParam label="电流" value={m.params.current} unit="A" />
+            <MeterParam label="功率" value={m.params.power} unit="kW" />
+          </React.Fragment>
+        ) : (
+          <React.Fragment>
+            <MeterParam label="瞬时流量" value={m.params.flow} unit="m³/h" />
+            <MeterParam label="电压" value={null} unit="V" />
+            <MeterParam label="功率" value={null} unit="kW" />
+          </React.Fragment>
+        )}
+      </div>
+      {/* 当前示数 */}
+      <div className="flex items-center justify-between text-[11px] pt-1" style={{ borderTop: '1px dashed rgba(43,127,255,.2)' }}>
+        <span style={{ color: 'var(--txt-dim)' }}>当前示数</span>
+        <span className="num text-[14px] font-bold" style={{ color: 'var(--blue)' }}>
+          {fmt(m.reading)}<span className="text-[9px] ml-0.5 font-medium" style={{ color: 'var(--txt-dim)' }}>{isElec ? 'kWh' : 'm³'}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MetersTab({ meters }){
+  const [filter, setFilter] = useState('all');                    // 表具类型筛选
+  const list = meters.filter((m) => filter === 'all' || m.kind === filter);
+  const normal = meters.filter((m) => m.status === '正常').length;
+  return (
+    <div className="h-full flex flex-col gap-3">
+      <div className="flex items-center justify-between shrink-0">
+        <SegSwitch value={filter} onChange={setFilter}
+          options={[{ v: 'all', label: '全部' }, { v: '电表', label: '⚡ 电表' }, { v: '水表', label: '💧 水表' }]} />
+        <span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+          接入表具 <b style={{ color: 'var(--cyan)' }}>{meters.length}</b> 块 · 正常 <b style={{ color: 'var(--green)' }}>{normal}</b> 块
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar pr-1">
+        <div className="grid grid-cols-4 gap-3">
+          {list.map((m) => <MeterCard key={m.id} m={m} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Tab 4：抄表记录（时间段筛选 + 表格）
+   ============================================================ */
+function ReadingsTab({ readings, days, setDays }){
+  const elecUsage = readings.filter((r) => r.kind === '电表').reduce((a, b) => a + b.usage, 0);
+  const waterUsage = readings.filter((r) => r.kind === '水表').reduce((a, b) => a + b.usage, 0);
+  return (
+    <div className="h-full flex flex-col gap-3">
+      {/* 时间段筛选（切换即重新 fetch） */}
+      <div className="flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px]" style={{ color: 'var(--txt-dim)' }}>时间段</span>
+          <SegSwitch value={days} onChange={setDays}
+            options={[{ v: 7, label: '近 7 天' }, { v: 15, label: '近 15 天' }, { v: 30, label: '近 30 天' }]} />
+        </div>
+        <span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>
+          共 <b style={{ color: 'var(--cyan)' }}>{readings.length}</b> 条 ·
+          电累计 <b style={{ color: 'var(--blue)' }}>{fmt(+elecUsage.toFixed(1))}</b> kWh ·
+          水累计 <b style={{ color: 'var(--cyan)' }}>{fmt(+waterUsage.toFixed(1))}</b> m³
+        </span>
+      </div>
+
+      <GlowCard title="抄表记录" en="Meter Readings" className="flex-1 min-h-0" bodyClass="flex flex-col">
+        {/* 表头 */}
+        <div className="grid text-[12px] font-bold py-2 px-2 shrink-0"
+          style={{ gridTemplateColumns: '1.3fr .7fr 1fr 1fr 1fr 1fr', color: 'var(--txt-dim)', borderBottom: '1px solid rgba(43,127,255,.25)' }}>
+          <span>表具编号</span><span>类型</span>
+          <span className="text-right">起码</span><span className="text-right">止码</span>
+          <span className="text-right">用量</span><span className="text-right pr-2">抄表时间</span>
+        </div>
+        {/* 表体 */}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar">
+          {readings.map((r, i) => (
+            <div key={i} className="grid items-center text-[13px] py-2 px-2 transition hover:bg-white/10"
+              style={{ gridTemplateColumns: '1.3fr .7fr 1fr 1fr 1fr 1fr', borderBottom: '1px dashed rgba(43,127,255,.14)' }}>
+              <span className="num font-semibold" style={{ color: 'var(--txt)' }}>{r.meter}</span>
+              <span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full"
+                  style={{
+                    color: r.kind === '电表' ? 'var(--blue)' : 'var(--cyan)',
+                    background: 'rgba(20,60,110,.07)',
+                    border: '1px solid ' + (r.kind === '电表' ? 'var(--blue)' : 'var(--cyan)'),
+                  }}>{r.kind === '电表' ? '⚡' : '💧'} {r.kind}</span>
+              </span>
+              <span className="num text-right" style={{ color: 'var(--txt-dim)' }}>{fmt(r.start)}</span>
+              <span className="num text-right" style={{ color: 'var(--txt-dim)' }}>{fmt(r.end)}</span>
+              <span className="num text-right font-bold" style={{ color: r.kind === '电表' ? 'var(--blue)' : 'var(--cyan)' }}>
+                {fmt(r.usage)}<span className="text-[10px] ml-0.5 font-medium" style={{ color: 'var(--txt-dim)' }}>{r.kind === '电表' ? 'kWh' : 'm³'}</span>
+              </span>
+              <span className="num text-right pr-2" style={{ color: 'var(--txt)' }}>{r.date}</span>
+            </div>
+          ))}
+        </div>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ============================================================
+   根组件：时钟 / Tab 路由 / 数据拉取
+   ============================================================ */
+const TABS = [
+  { key: 'overview', label: '系统态势' },
+  { key: 'analysis', label: '能耗分析' },
+  { key: 'meters',   label: '仪表监测' },
+  { key: 'readings', label: '抄表记录' },
+];
+
+function App(){
+  const [now, setNow] = useState(() => new Date());
+  const [tab, setTab] = useState('overview');
+
+  // 各接口数据（初始值为与接口同构的 mock 兜底）
+  const [ov, setOv] = useState(MOCK_OVERVIEW);
+  const [analysis, setAnalysis] = useState(MOCK_ANALYSIS);
+  const [meters, setMeters] = useState(MOCK_METERS);
+  const [readings, setReadings] = useState(MOCK_READINGS);
+
+  // 能耗分析筛选条件
+  const [dim, setDim] = useState('item');        // item | building | function
+  const [period, setPeriod] = useState('day');   // day | month | year
+  // 抄表记录时间段
+  const [days, setDays] = useState(7);
+
+  // 时钟：每秒更新
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 系统态势 overview：每 5 秒轮询（核心数据，失败静默走 mock）
+  useEffect(() => {
+    const load = () => {
+      fetch('api/v1/energy/overview')
+        .then((r) => r.json())
+        .then((d) => { if (d && d.elec && d.trend24h) setOv(d); })
+        .catch(() => {});
+    };
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 能耗分析：Tab 激活或 维度/周期 变化时拉取
+  useEffect(() => {
+    if (tab !== 'analysis') return;
+    fetch('api/v1/energy/analysis?dim=' + dim + '&period=' + period)
+      .then((r) => r.json())
+      .then((d) => { if (d && d.compare) setAnalysis(d); })
+      .catch(() => {});
+  }, [tab, dim, period]);
+
+  // 仪表监测：Tab 激活时拉取
+  useEffect(() => {
+    if (tab !== 'meters') return;
+    fetch('api/v1/energy/meters')
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d) && d.length) setMeters(d); })
+      .catch(() => {});
+  }, [tab]);
+
+  // 抄表记录：Tab 激活或时间段变化时拉取
+  useEffect(() => {
+    if (tab !== 'readings') return;
+    fetch('api/v1/energy/readings?days=' + days)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d) && d.length) setReadings(d); })
+      .catch(() => {});
+  }, [tab, days]);
+
+  return (
+    <div className="h-full flex flex-col">
+      <TopBar now={now} />
+
+      {/* Tab 切换行 */}
+      <div className="flex items-center justify-center gap-4 py-2.5 shrink-0">
+        {TABS.map((t) => (
+          <button key={t.key} className={"tab-btn" + (tab === t.key ? " on" : "")}
+            onClick={() => setTab(t.key)}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Tab 内容区 */}
+      <div className="flex-1 min-h-0 px-5 pb-5 pt-1">
+        {tab === 'overview' && <OverviewTab ov={ov} />}
+        {tab === 'analysis' && <AnalysisTab data={analysis} dim={dim} setDim={setDim} period={period} setPeriod={setPeriod} />}
+        {tab === 'meters'   && <MetersTab meters={meters} />}
+        {tab === 'readings' && <ReadingsTab readings={readings} days={days} setDays={setDays} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
