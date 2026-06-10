@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-0:#bcd9fb;
+    --bg-1:#d8eaff;
+    --cyan:#0a93c9;
+    --blue:#2b7fff;
+    --magenta:#e23a82;
+    --violet:#8a4fd6;
+    --orange:#ef8326;
+    --red:#e24550;
+    --green:#1fa85f;
+    --txt:#123c6e;
+    --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:#cfe4ff; overflow:hidden; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+
+  /* ---- stage scaling ---- */
+  #stage-wrap{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(1300px 760px at 50% -12%, rgba(255,255,255,.7), transparent 62%),
+      linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    overflow:hidden;
+  }
+  #stage{
+    width:1920px; height:1080px; position:relative;
+    transform-origin:center center;
+    background:
+      radial-gradient(1500px 880px at 50% 4%, #eaf4ff 0%, transparent 56%),
+      linear-gradient(180deg,#9ec6f2 0%,#bcd9fb 48%,#d8eaff 100%);
+  }
+
+  /* ---- glass card ---- */
+  .glass{
+    position:relative;
+    background:linear-gradient(160deg, rgba(255,255,255,.16), rgba(220,238,255,.08));
+    border:1px solid rgba(120,170,230,.32);
+    border-radius:8px;
+    box-shadow:0 6px 26px rgba(60,110,180,0.1), inset 0 1px 0 rgba(255,255,255,.5);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  }
+  .glass::before,.glass::after{
+    content:""; position:absolute; width:14px; height:14px; pointer-events:none;
+    border-color:var(--cyan); opacity:.85;
+  }
+  .glass::before{ left:-1px; top:-1px; border-left:2px solid; border-top:2px solid; border-top-left-radius:8px; }
+  .glass::after{ right:-1px; bottom:-1px; border-right:2px solid; border-bottom:2px solid; border-bottom-right-radius:8px; }
+
+  .card-title{
+    display:flex; align-items:center; gap:8px;
+    padding:9px 14px 8px; position:relative;
+  }
+  .card-title .dot{ width:7px; height:7px; transform:rotate(45deg); background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .card-title h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:1px; color:#0e3a72; }
+  .card-title::after{
+    content:""; position:absolute; left:14px; right:14px; bottom:0; height:1px;
+    background:linear-gradient(90deg, var(--cyan), rgba(43,127,255,0) 70%);
+  }
+  .title-en{ font-size:10px; color:var(--txt-dim); letter-spacing:2px; text-transform:uppercase; font-family:'Oxanium'; }
+
+  .glow-text{ text-shadow:0 1px 1px rgba(255,255,255,.55); }
+  .scrollbar::-webkit-scrollbar{ width:6px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.35); border-radius:3px; }
+  .scrollbar::-webkit-scrollbar-track{ background:transparent; }
+
+  @keyframes spinSlow{ to{ transform:rotate(360deg); } }
+  .spin-slow{ animation:spinSlow 24s linear infinite; }
+  @keyframes pulseGrid{ 0%,100%{opacity:.5;} 50%{opacity:.9;} }
+  @keyframes floatY{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-10px);} }
+  @keyframes sweep{ 0%{ transform:translateX(-120%);} 100%{ transform:translateX(320%);} }
+  @keyframes blink{ 0%,100%{ opacity:1;} 50%{ opacity:.25;} }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+
+  .recharts-default-tooltip{ background:rgba(255,255,255,.95)!important; border:1px solid var(--line)!important; border-radius:6px!important; }
+  .recharts-tooltip-label,.recharts-tooltip-item{ color:#123c6e!important; }
+
+  /* ================= 赛博朋克 / Cyber HUD ================= */
+  .glitch{ position:relative; color:#0e3a72;
+    text-shadow:0 2px 10px rgba(255,255,255,.7), 1px 0 rgba(43,127,255,.25); }
+
+  .scanlines{ position:absolute; inset:0; pointer-events:none; z-index:6;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,0) 0 2px, rgba(120,160,210,.07) 2px 3px);
+    mix-blend-mode:multiply; opacity:.4; }
+  .vignette{ position:absolute; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(120% 80% at 50% 40%, transparent 60%, rgba(255,255,255,.35) 100%); }
+  @keyframes scan{ 0%{ transform:translateY(-100%);} 100%{ transform:translateY(2200%);} }
+  .scan-bar{ position:absolute; left:0; right:0; height:2px; z-index:6; pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(0,229,255,.5), rgba(255,45,120,.4), transparent);
+    animation:scan 7s linear infinite; opacity:.5; }
+
+  .hud-bracket{ position:absolute; width:54px; height:54px; pointer-events:none; z-index:30; opacity:.85; }
+  .hud-bracket::before,.hud-bracket::after{ content:""; position:absolute; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  .hud-bracket.tl{ left:14px; top:12px; } .hud-bracket.tr{ right:14px; top:12px; }
+  .hud-bracket.bl{ left:14px; bottom:12px; } .hud-bracket.br{ right:14px; bottom:12px; }
+  .hud-bracket::before{ width:24px; height:2px; } .hud-bracket::after{ width:2px; height:24px; }
+  .hud-bracket.tl::before{ left:0; top:0; } .hud-bracket.tl::after{ left:0; top:0; }
+  .hud-bracket.tr::before{ right:0; top:0; background:var(--magenta); box-shadow:0 0 8px var(--magenta); } .hud-bracket.tr::after{ right:0; top:0; background:var(--magenta); box-shadow:0 0 8px var(--magenta); }
+  .hud-bracket.bl::before{ left:0; bottom:0; } .hud-bracket.bl::after{ left:0; bottom:0; }
+  .hud-bracket.br::before{ right:0; bottom:0; background:var(--magenta); box-shadow:0 0 8px var(--magenta); } .hud-bracket.br::after{ right:0; bottom:0; background:var(--magenta); box-shadow:0 0 8px var(--magenta); }
+
+  .kpi{ position:relative; }
+  .kpi::before{ content:""; position:absolute; top:-6px; width:13px; height:13px; border-top:2px solid var(--accent); opacity:.9; }
+  .kpi::after{ content:""; position:absolute; bottom:-6px; width:13px; height:13px; border-bottom:2px solid var(--accent); opacity:.55; }
+  .kpi.l::before{ left:-11px; border-left:2px solid var(--accent); }
+  .kpi.l::after{ left:-11px; border-left:2px solid var(--accent); }
+  .kpi.r::before{ right:-11px; border-right:2px solid var(--accent); }
+  .kpi.r::after{ right:-11px; border-right:2px solid var(--accent); }
+
+  @keyframes ticker{ 0%{ transform:translateX(0);} 100%{ transform:translateX(-50%);} }
+  .ticker-track{ display:inline-flex; gap:40px; white-space:nowrap; animation:ticker 34s linear infinite; }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage"><div id="root"></div></div>
+  </div>
+
+  <script>
+    // Silence a known, harmless recharts 2.x deprecation warning (defaultProps on XAxis/YAxis)
+    (function(){
+      var _err = console.error;
+      console.error = function(){
+        var m = arguments[0];
+        if (typeof m === 'string' && m.indexOf('defaultProps') !== -1) return;
+        return _err.apply(console, arguments);
+      };
+    })();
+    // ---- responsive scaling of the 1920x1080 stage ----
+    function fitStage(){
+      var s = document.getElementById('stage');
+      var scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      s.style.transform = 'scale(' + scale + ')';
+    }
+    window.addEventListener('resize', fitStage);
+    fitStage();
+  </script>
+
+  <script type="text/babel">
+/* ============================================================
+   IBMS 大屏 — 共享组件 / Mock 数据 / 图表小部件
+   ============================================================ */
+const { useState, useEffect, useRef, useLayoutEffect } = React;
+
+/* ---------- 工具 ---------- */
+function jitter(v, amp, min, max, dp){
+  let n = v + (Math.random() - 0.5) * amp;
+  if (min != null) n = Math.max(min, n);
+  if (max != null) n = Math.min(max, n);
+  const f = Math.pow(10, dp == null ? 0 : dp);
+  return Math.round(n * f) / f;
+}
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+
+/* ---------- 自测量容器（替代 recharts ResponsiveContainer，避免 transform:scale 下 ResizeObserver 不触发） ---------- */
+function AutoBox({ children }){
+  const ref = useRef(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.clientWidth), h = Math.round(el.clientHeight);
+      setSize((p) => (p.w === w && p.h === h) ? p : { w, h });
+    };
+    measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 60);
+    return () => { ro && ro.disconnect(); window.removeEventListener('resize', measure); clearTimeout(t); };
+  }, []);
+  return (
+    <div ref={ref} style={{ width: '100%', height: '100%' }}>
+      {size.w > 0 && size.h > 0 ? children(size.w, size.h) : null}
+    </div>
+  );
+}
+
+/* ---------- 卡片外壳 ---------- */
+function GlowCard({ title, en, extra, children, className, bodyClass }){
+  return (
+    <div className={"glass flex flex-col " + (className || "")}>
+      <div className="card-title">
+        <span className="dot"></span>
+        <h3>{title}</h3>
+        {en ? <span className="title-en">{en}</span> : null}
+        <div className="ml-auto">{extra}</div>
+      </div>
+      <div className={"flex-1 min-h-0 px-3.5 pb-3 pt-2 " + (bodyClass || "")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 圆环仪表（环境） ---------- */
+function RingGauge({ label, value, unit, max, color, danger }){
+  const r = 30, c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, value / max));
+  const dash = c * pct;
+  const col = danger ? 'var(--orange)' : color;
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <div className="relative" style={{ width: 84, height: 84 }}>
+        <svg width="84" height="84" viewBox="0 0 84 84" className="-rotate-90">
+          <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(20,60,110,.12)" strokeWidth="6" />
+          <circle cx="42" cy="42" r={r} fill="none" stroke={col} strokeWidth="6"
+            strokeLinecap="round" strokeDasharray={dash + ' ' + c}
+            style={{ filter: 'drop-shadow(0 0 5px ' + col + ')', transition: 'stroke-dasharray .8s ease' }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="num text-[20px] font-bold leading-none glow-text" style={{ color: col }}>{value}</div>
+          <div className="text-[10px] num mt-0.5" style={{ color: 'var(--txt-dim)' }}>{unit}</div>
+        </div>
+      </div>
+      <div className="text-[12px] mt-1.5" style={{ color: 'var(--txt)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ---------- 数值统计块 ---------- */
+function StatBlock({ value, label, color, unit }){
+  return (
+    <div className="flex flex-col items-center justify-center flex-1 py-1">
+      <div className="num text-[26px] font-bold leading-none glow-text" style={{ color: color || 'var(--cyan)' }}>
+        {value}{unit ? <span className="text-[13px] ml-0.5 font-medium">{unit}</span> : null}
+      </div>
+      <div className="text-[12px] mt-1.5" style={{ color: 'var(--txt-dim)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ---------- 进度条 ---------- */
+function Bar({ label, value, total, color }){
+  const pct = Math.round((value / total) * 100);
+  return (
+    <div className="mb-2 last:mb-0">
+      <div className="flex justify-between text-[12px] mb-1">
+        <span style={{ color: 'var(--txt)' }}>{label}</span>
+        <span className="num" style={{ color }}>{value}<span style={{ color: 'var(--txt-dim)' }}>/{total}</span></span>
+      </div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(20,60,110,.1)' }}>
+        <div className="h-full rounded-full" style={{
+          width: pct + '%', background: 'linear-gradient(90deg,' + color + ',rgba(255,255,255,.65))',
+          boxShadow: '0 0 8px ' + color, transition: 'width .8s ease'
+        }}></div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   高级数据可视化部件（仪表 / 趋势 / 排名 / 车位栅格）
+   ============================================================ */
+
+/* ---------- 极坐标弧线工具 ---------- */
+function polar(cx, cy, r, deg){ const a = (deg - 90) * Math.PI / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+function arcPath(cx, cy, r, a0, a1){
+  const s = polar(cx, cy, r, a1), e = polar(cx, cy, r, a0);
+  const large = (a1 - a0) <= 180 ? 0 : 1;
+  return 'M' + s[0] + ',' + s[1] + ' A' + r + ',' + r + ' 0 ' + large + ' 0 ' + e[0] + ',' + e[1];
+}
+
+/* ---------- 趋势历史 Hook ---------- */
+function useTrend(value, n){
+  n = n || 24;
+  const [hist, setHist] = useState(() => {
+    // 用轻微随机游走预填历史，使迷你折线与涨跌幅一开始就有形态
+    let v = value || 1; const arr = [];
+    for (let i = 0; i < n; i++){ v = v * (1 + (Math.random() - 0.5) * 0.05); arr.push(v); }
+    arr[n - 1] = value;
+    return arr;
+  });
+  useEffect(() => { setHist((h) => [...h.slice(1), value]); }, [value]);
+  const first = hist[0], last = hist[hist.length - 1];
+  const delta = first ? ((last - first) / Math.abs(first)) * 100 : 0;
+  return { hist, delta };
+}
+
+/* ---------- 涨跌徽标 ---------- */
+function Delta({ delta, invert, size }){
+  const up = delta >= 0;
+  const good = invert ? !up : up;
+  const col = Math.abs(delta) < 0.05 ? 'var(--txt-dim)' : (good ? 'var(--green)' : 'var(--orange)');
+  return (
+    <span className="num inline-flex items-center gap-0.5 font-semibold" style={{ color: col, fontSize: size || 11 }}>
+      {up ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
+    </span>
+  );
+}
+
+/* ---------- 迷你趋势折线 ---------- */
+function Sparkline({ hist, color, w, h }){
+  w = w || 88; h = h || 26;
+  const min = Math.min(...hist), max = Math.max(...hist), rng = (max - min) || 1;
+  const sx = w / (hist.length - 1);
+  const pts = hist.map((v, i) => [i * sx, h - 2 - ((v - min) / rng) * (h - 5)]);
+  const line = 'M' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L');
+  const area = line + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+  const id = 'spk' + color.replace(/[^a-z0-9]/gi, '');
+  const end = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} viewBox={'0 0 ' + w + ' ' + h} style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.45" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={'url(#' + id + ')'} />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round"
+        style={{ filter: 'drop-shadow(0 0 3px ' + color + ')' }} />
+      <circle cx={end[0]} cy={end[1]} r="2.2" fill={color} style={{ filter: 'drop-shadow(0 0 4px ' + color + ')' }} />
+    </svg>
+  );
+}
+
+/* ---------- 刻度仪表盘（270°，带刻度+指针端点） ---------- */
+function TickGauge({ label, value, unit, max, color, delta, invert }){
+  const CX = 48, CY = 46, R = 30, A0 = -135, A1 = 135;
+  const pct = Math.max(0, Math.min(1, value / max));
+  const vEnd = A0 + pct * (A1 - A0);
+  const danger = pct > 0.82;
+  const col = danger ? 'var(--orange)' : color;
+  const ticks = Array.from({ length: 16 }, (_, i) => A0 + (i / 15) * (A1 - A0));
+  const dot = polar(CX, CY, R, vEnd);
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative" style={{ width: 96, height: 84 }}>
+        <svg width="96" height="84" viewBox="0 0 96 84">
+          {/* 刻度 */}
+          {ticks.map((a, i) => {
+            const inner = polar(CX, CY, R + 5, a), outer = polar(CX, CY, R + (i % 5 === 0 ? 10 : 8), a);
+            const on = (i / 15) <= pct;
+            return <line key={i} x1={inner[0]} y1={inner[1]} x2={outer[0]} y2={outer[1]}
+              stroke={on ? col : 'rgba(20,60,110,.18)'} strokeWidth={i % 5 === 0 ? 1.6 : 1}
+              style={on ? { filter: 'drop-shadow(0 0 2px ' + col + ')' } : null} />;
+          })}
+          {/* 轨道 */}
+          <path d={arcPath(CX, CY, R, A0, A1)} fill="none" stroke="rgba(20,60,110,.13)" strokeWidth="5" strokeLinecap="round" />
+          {/* 数值弧 */}
+          <path d={arcPath(CX, CY, R, A0, vEnd)} fill="none" stroke={col} strokeWidth="5" strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 5px ' + col + ')', transition: 'all .8s ease' }} />
+          <circle cx={dot[0]} cy={dot[1]} r="3.4" fill="#fff" style={{ filter: 'drop-shadow(0 0 5px ' + col + ')' }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pt-1.5 pointer-events-none">
+          <div className="num text-[19px] font-bold leading-none glow-text" style={{ color: col }}>{value}</div>
+          <div className="num text-[9px] mt-0.5" style={{ color: 'var(--txt-dim)' }}>{unit}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 -mt-1">
+        <span className="text-[12px]" style={{ color: 'var(--txt)' }}>{label}</span>
+        {delta != null ? <Delta delta={delta} invert={invert} size={10} /> : null}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 半圆完成率仪表（180°） ---------- */
+function RadialGauge({ value, max, label, sub, color }){
+  const CX = 70, CY = 66, R = 52;
+  const pct = Math.max(0, Math.min(1, value / max));
+  const vEnd = -90 + pct * 180;
+  const dot = polar(CX, CY, R, vEnd);
+  return (
+    <div className="relative" style={{ width: 140, height: 86 }}>
+      <svg width="140" height="86" viewBox="0 0 140 86">
+        <defs>
+          <linearGradient id="rg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#2b7fff" /><stop offset="100%" stopColor={color} />
+          </linearGradient>
+        </defs>
+        <path d={arcPath(CX, CY, R, -90, 90)} fill="none" stroke="rgba(20,60,110,.13)" strokeWidth="9" strokeLinecap="round" />
+        <path d={arcPath(CX, CY, R, -90, vEnd)} fill="none" stroke="url(#rg)" strokeWidth="9" strokeLinecap="round"
+          style={{ filter: 'drop-shadow(0 0 6px ' + color + ')', transition: 'all .8s ease' }} />
+        <circle cx={dot[0]} cy={dot[1]} r="4.5" fill="#fff" style={{ filter: 'drop-shadow(0 0 6px ' + color + ')' }} />
+      </svg>
+      <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: 26 }}>
+        <div className="num text-[30px] font-bold leading-none glow-text" style={{ color }}>{Math.round(pct * 100)}<span className="text-[14px]">%</span></div>
+        <div className="text-[12px] mt-1" style={{ color: 'var(--txt)' }}>{label}</div>
+        <div className="text-[10px] num" style={{ color: 'var(--txt-dim)' }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 排名条 ---------- */
+function RankBar({ idx, name, value, total, color, unit, delta }){
+  const pct = Math.round((value / total) * 100);
+  return (
+    <div className="flex items-center gap-2.5 pr-1.5">
+      <span className="num text-[11px] font-bold w-4 h-4 flex items-center justify-center rounded-sm shrink-0"
+        style={{ color: idx < 3 ? '#04101f' : 'var(--txt-dim)', background: idx < 3 ? color : 'rgba(20,60,110,.09)' }}>{idx + 1}</span>
+      <span className="text-[12px] w-9 shrink-0" style={{ color: 'var(--txt)' }}>{name}</span>
+      <div className="flex-1 min-w-0 h-2.5 rounded-full overflow-hidden relative" style={{ background: 'rgba(20,60,110,.09)' }}>
+        <div className="h-full rounded-full" style={{ width: pct + '%', background: 'linear-gradient(90deg,' + color + '66,' + color + ')', boxShadow: '0 0 8px ' + color, transition: 'width .8s ease' }}></div>
+      </div>
+      <span className="num text-[13px] font-bold w-[52px] text-right shrink-0" style={{ color }}>{value}<span className="text-[9px] ml-0.5" style={{ color: 'var(--txt-dim)' }}>{unit}</span></span>
+      {delta != null ? <span className="w-8 text-right shrink-0"><Delta delta={delta} size={10} /></span> : null}
+    </div>
+  );
+}
+
+/* ---------- 车位栅格 ---------- */
+function StallGrid({ used, total, cols }){
+  cols = cols || 14;
+  const cells = 42;
+  const filled = Math.round((used / total) * cells);
+  return (
+    <div className="grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(' + cols + ',1fr)' }}>
+      {Array.from({ length: cells }).map((_, i) => {
+        const on = i < filled;
+        return <span key={i} className="rounded-[2px]" style={{
+          height: 9, background: on ? 'linear-gradient(180deg,#2b7fff,#2b7fff)' : 'rgba(20,60,110,.1)',
+          boxShadow: on ? '0 0 5px rgba(43,127,255,.5)' : 'none', transition: 'all .5s ease',
+        }}></span>;
+      })}
+    </div>
+  );
+}
+
+
+function initialData(){
+  return {
+    weather: { city: '上海', temp: 24, desc: '多云', icon: '⛅' },
+    env: { temp: 23.4, humidity: 56, pm25: 38, co2: 612 },
+    devices: { online: 1284, offline: 96, fault: 23 },
+    energy: [
+      { name: '照明', v: 320, color: '#0a93c9' },
+      { name: '空调', v: 540, color: '#2b7fff' },
+      { name: '动力', v: 410, color: '#1fa85f' },
+      { name: '电梯', v: 180, color: '#d99a16' },
+      { name: '其他', v: 130, color: '#ef8326' },
+    ],
+    parking: { total: 1200, used: 836, free: 364 },
+    workorder: { repair: 42, inspect: 68, done: 95, undone: 15 },
+    room: { temp: 22.1, humidity: 45, power: 'A/B 双路', status: '正常' },
+    broadcast: { zones: 24, playing: 6, volume: 72 },
+    alarmTrend: Array.from({ length: 12 }, (_, i) => ({
+      t: pad(i * 2) + ':00',
+      入侵: Math.round(2 + Math.random() * 5),
+      消防: Math.round(Math.random() * 3),
+      设备: Math.round(1 + Math.random() * 6),
+    })),
+    securityCat: [
+      { name: '视频监控', v: 14, color: '#0a93c9' },
+      { name: '门禁报警', v: 9, color: '#2b7fff' },
+      { name: '消防报警', v: 5, color: '#ef8326' },
+      { name: '周界入侵', v: 7, color: '#e24550' },
+    ],
+  };
+}
+
+/* 报警 & 消息列表 */
+const ALARM_LIST = [
+  { id: 'A2041', time: '14:32:10', dev: '3F 空调机组 AC-03', type: '设备故障', level: '紧急', desc: '送风温度异常偏高，疑似压缩机过载' },
+  { id: 'A2040', time: '14:18:46', dev: 'B2 配电室 PD-01', type: '电力报警', level: '重要', desc: 'A 路电压波动超出阈值 ±10%' },
+  { id: 'A2039', time: '13:55:02', dev: '周界东侧 PIR-12', type: '周界入侵', level: '紧急', desc: '检测到非法越界，请确认现场情况' },
+  { id: 'A2038', time: '13:40:21', dev: '5F 烟感 SD-208', type: '消防报警', level: '紧急', desc: '烟雾浓度超标，已联动排烟系统' },
+  { id: 'A2037', time: '13:12:09', dev: '1F 大堂门禁 ACS-01', type: '门禁报警', level: '一般', desc: '非授权卡片连续刷卡 3 次' },
+  { id: 'A2036', time: '12:48:33', dev: '机房精密空调 CRAC-2', type: '环境报警', level: '重要', desc: '机房温度 28.6℃ 超过设定上限' },
+  { id: 'A2035', time: '12:20:57', dev: 'P1 车库 CO 探测器', type: '环境报警', level: '一般', desc: 'CO 浓度上升，已启动排风' },
+];
+const MSG_LIST = [
+  { id: 'M88', time: '14:40', from: '运维班组', title: '今日设备巡检任务已下发', tag: '任务' },
+  { id: 'M87', time: '14:05', from: '能源管理', title: '本月累计能耗较上月下降 6.2%', tag: '报表' },
+  { id: 'M86', time: '13:30', from: '系统', title: 'BA 系统固件升级将于今晚 23:00 进行', tag: '系统' },
+  { id: 'M85', time: '11:50', from: '物业前台', title: '3F 会议室预约空调提前开启', tag: '请求' },
+  { id: 'M84', time: '10:18', from: '安防中心', title: '周界巡检记录已归档', tag: '安防' },
+  { id: 'M83', time: '09:02', from: '工单系统', title: '2 条报修工单待您审批', tag: '工单' },
+];
+
+Object.assign(window, {
+  jitter, pad, AutoBox, GlowCard, RingGauge, StatBlock, Bar,
+  useTrend, Delta, Sparkline, TickGauge, RadialGauge, RankBar, StallGrid,
+  initialData, ALARM_LIST, MSG_LIST,
+});
+
+
+/* ============================================================
+   IBMS 大屏 — 小型「全息数字孪生楼栋」引擎（天空蓝）
+   createCity3D(container) -> { dispose, setScene, resize }
+   ============================================================ */
+function createCity3D(container){
+  const W0 = container.clientWidth || 800;
+  const H0 = container.clientHeight || 600;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(W0, H0);
+  renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;';
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0xd6e8ff, 0.0006);
+
+  const camera = new THREE.PerspectiveCamera(42, W0 / H0, 0.1, 5000);
+  camera.position.set(0, 150, 360);
+
+  // 天空蓝灯光
+  scene.add(new THREE.AmbientLight(0x9fcdf0, 1.15));
+  const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x1a5ea0, 0.9); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffffff, 0.7); key.position.set(120, 220, 160); scene.add(key);
+  const p1 = new THREE.PointLight(0x6fd0ff, 0.9, 700); p1.position.set(-130, 140, 110); scene.add(p1);
+  const p2 = new THREE.PointLight(0x3aa0ff, 0.8, 700); p2.position.set(140, 80, -110); scene.add(p2);
+
+  const root = new THREE.Group();
+  scene.add(root);
+  const disposables = [];
+
+  const SKY = 0x2b7fff, SKY2 = 0x2b7fff, BLUE = 0x5aa0dc;
+
+  /* ---------- 立面发光贴图 ---------- */
+  function facadeTexture(floors){
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256;
+    const ctx = c.getContext('2d');
+    const fh = 256 / floors;
+    ctx.strokeStyle = 'rgba(40,110,180,0.55)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i <= floors; i++){ ctx.beginPath(); ctx.moveTo(0, i * fh); ctx.lineTo(128, i * fh); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(40,110,180,0.22)'; ctx.lineWidth = 1;
+    for (let x = 16; x < 128; x += 16){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 256); ctx.stroke(); }
+    for (let i = 0; i < floors; i++) for (let x = 0; x < 8; x++){
+      if (Math.random() < 0.16){ ctx.fillStyle = 'rgba(43,127,255,0.5)'; ctx.fillRect(x * 16 + 3, i * fh + 3, 10, fh - 6); }
+    }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    disposables.push(t); return t;
+  }
+
+  /* ---------- 小型楼栋：宽体裙楼 + 主楼 + 顶层（整体矮、完整可见） ---------- */
+  const building = new THREE.Group();
+  root.add(building);
+
+  function block(w, h, d, y, floors){
+    const tex = facadeTexture(floors);
+    tex.repeat.set(Math.max(1, Math.round(w / 26)), 1);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2f7fc4, metalness: 0.4, roughness: 0.4, transparent: true, opacity: 0.3 });
+    mat.emissive = new THREE.Color(0x2766a8); mat.emissiveMap = tex; mat.emissiveIntensity = 0.4;
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mesh = new THREE.Mesh(geo, mat); mesh.position.y = y + h / 2;
+    building.add(mesh); disposables.push(geo, mat, tex);
+    const eGeo = new THREE.EdgesGeometry(geo);
+    const eMat = new THREE.LineBasicMaterial({ color: 0x12568f, transparent: true, opacity: 0.62, depthWrite: false });
+    const edges = new THREE.LineSegments(eGeo, eMat); edges.position.copy(mesh.position);
+    building.add(edges); disposables.push(eGeo, eMat);
+    // 顶面高亮
+    const capMat = new THREE.MeshBasicMaterial({ color: 0x2b7fff, transparent: true, opacity: 0.42 });
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(w * 0.99, 2.5, d * 0.99), capMat);
+    cap.position.set(0, y + h, 0); building.add(cap); disposables.push(capMat);
+    return y + h;
+  }
+
+  // 宽裙楼 -> 主体 -> 退台顶层，整体高度 ~140，宽 ~150
+  let y = 0;
+  y = block(150, 34, 110, y, 2);   // 裙楼
+  y = block(96, 70, 78, y, 5);     // 主体
+  y = block(58, 36, 50, y, 3);     // 顶层退台
+  const TOTAL_H = y;
+
+  // 顶部小天线 + 信标
+  const spireMat = new THREE.MeshBasicMaterial({ color: 0x2b7fff, transparent: true, opacity: 0.9 });
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.6, 26, 8), spireMat);
+  spire.position.y = TOTAL_H + 13; building.add(spire); disposables.push(spire.geometry, spireMat);
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0xef8326 });
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(2, 12, 12), beaconMat);
+  beacon.position.y = TOTAL_H + 28; building.add(beacon); disposables.push(beacon.geometry, beaconMat);
+
+  /* ---------- 上升扫描光面 ---------- */
+  const scanMat = new THREE.MeshBasicMaterial({ color: 0x2b7fff, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false });
+  const scanPlane = new THREE.Mesh(new THREE.PlaneGeometry(160, 130), scanMat);
+  scanPlane.rotation.x = -Math.PI / 2; building.add(scanPlane); disposables.push(scanPlane.geometry, scanMat);
+  const scanEdgeMat = new THREE.LineBasicMaterial({ color: 0x2b7fff, transparent: true, opacity: 0.55, depthWrite: false });
+  const scanEdgeGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-80, 0, -65), new THREE.Vector3(80, 0, -65),
+    new THREE.Vector3(80, 0, 65), new THREE.Vector3(-80, 0, 65), new THREE.Vector3(-80, 0, -65),
+  ]);
+  const scanEdge = new THREE.Line(scanEdgeGeo, scanEdgeMat); building.add(scanEdge); disposables.push(scanEdgeGeo, scanEdgeMat);
+
+  /* ---------- 光台地环 ---------- */
+  function ringMesh(rad, tube, color, opacity){
+    const geo = new THREE.RingGeometry(rad, rad + tube, 96);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false });
+    const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = 0.3;
+    root.add(m); disposables.push(geo, mat); return m;
+  }
+  ringMesh(120, 2.5, 0x2b7fff, 0.55);
+  ringMesh(150, 1.5, 0x5aa0dc, 0.38);
+  const grid = new THREE.GridHelper(800, 32, 0x4f93cf, 0x84b4e4);
+  grid.material.transparent = true; grid.material.opacity = 0.3; grid.material.depthWrite = false;
+  root.add(grid);
+
+  /* ---------- 视角预设（楼栋小，整体可见） ---------- */
+  const MID = TOTAL_H * 0.5;
+  const PRESETS = {
+    'BIM三维':  { R: 360, H: 165, fov: 42, speed: 0.05, tY: MID },
+    '全景VR':   { R: 210, H: 70,  fov: 56, speed: 0.10, tY: MID * 0.8 },
+    '二维组态': { R: 280, H: 340, fov: 40, speed: 0.03, tY: 0 },
+    'GIS地图':  { R: 240, H: 400, fov: 38, speed: 0.04, tY: 0 },
+  };
+  let target = { ...PRESETS['BIM三维'] };
+  const cur = { ...PRESETS['BIM三维'] };
+  function setScene(name){ if (PRESETS[name]) target = { ...PRESETS[name] }; }
+
+  /* ---------- 渲染循环 ---------- */
+  let angle = 0.5, raf = 0, last = performance.now(), alive = true;
+  function tick(now){
+    if (!alive) return;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const ts = now / 1000;
+
+    cur.R += (target.R - cur.R) * 0.05;
+    cur.H += (target.H - cur.H) * 0.05;
+    cur.fov += (target.fov - cur.fov) * 0.05;
+    cur.tY += (target.tY - cur.tY) * 0.05;
+    angle += dt * target.speed;
+    camera.position.set(Math.cos(angle) * cur.R, cur.H + Math.sin(ts / 3) * 5, Math.sin(angle) * cur.R);
+    camera.lookAt(0, cur.tY, 0);
+    if (Math.abs(camera.fov - cur.fov) > 0.01){ camera.fov = cur.fov; camera.updateProjectionMatrix(); }
+
+    building.rotation.y += dt * 0.08;
+
+    // 扫描面上升
+    const sy = ((ts * 22) % (TOTAL_H + 30));
+    scanPlane.position.y = sy; scanEdge.position.y = sy;
+    const fade = sy > TOTAL_H ? Math.max(0, 1 - (sy - TOTAL_H) / 30) : 1;
+    scanMat.opacity = 0.18 * fade; scanEdgeMat.opacity = 0.6 * fade;
+
+    beaconMat.opacity = 0.5 + 0.5 * Math.sin(ts * 2);
+
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(tick);
+  }
+  // 立即渲染一帧静态画面（防止页面隐藏/rAF 未启动时中央空白）
+  camera.position.set(Math.cos(angle) * cur.R, cur.H, Math.sin(angle) * cur.R);
+  camera.lookAt(0, cur.tY, 0);
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+
+  raf = requestAnimationFrame(tick);
+
+  function resize(){
+    const w = container.clientWidth, h = container.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    renderer.render(scene, camera);
+  }
+  let ro;
+  if (typeof ResizeObserver !== 'undefined'){ ro = new ResizeObserver(resize); ro.observe(container); }
+  window.addEventListener('resize', resize);
+
+  function dispose(){
+    alive = false; cancelAnimationFrame(raf);
+    ro && ro.disconnect(); window.removeEventListener('resize', resize);
+    disposables.forEach((d) => d && d.dispose && d.dispose());
+    renderer.dispose();
+    if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
+  }
+
+  return { dispose, setScene, resize };
+}
+
+window.createCity3D = createCity3D;
+
+
+/* ============================================================
+   IBMS 大屏 — 左 / 右 数据面板（高级可视化版）
+   ============================================================ */
+const {
+  PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area,
+} = Recharts;
+
+const axisStyle = { fontSize: 11, fontFamily: 'Oxanium', fill: '#6f93b8' };
+
+/* 旋转点缀环 */
+function OrbitRing({ size }){
+  return (
+    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none spin-slow"
+      style={{ width: size, height: size, borderRadius: '50%', border: '1px dashed rgba(0,229,255,.25)' }}></div>
+  );
+}
+
+/* ====================== 环境统计 ====================== */
+function EnvGauge({ label, value, unit, max, color, invert }){
+  const { delta } = useTrend(value);
+  return <TickGauge label={label} value={value} unit={unit} max={max} color={color} delta={delta} invert={invert} />;
+}
+function EnvCard({ d }){
+  return (
+    <GlowCard title="环境统计" en="Environment" className="flex-1"
+      extra={<span className="text-[11px] px-2 py-0.5 rounded-full whitespace-nowrap" style={{ color: 'var(--green)', background: 'rgba(31,168,95,.16)' }}>● 舒适</span>}>
+      <div className="grid grid-cols-4 h-full place-items-center">
+        <EnvGauge label="温度" value={d.env.temp} unit="℃" max={45} color="#0a93c9" />
+        <EnvGauge label="湿度" value={d.env.humidity} unit="%RH" max={100} color="#2b7fff" />
+        <EnvGauge label="PM2.5" value={d.env.pm25} unit="μg/m³" max={150} color="#1fa85f" invert />
+        <EnvGauge label="CO₂" value={d.env.co2} unit="ppm" max={1500} color="#d99a16" invert />
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ====================== 设备运行 ====================== */
+function DeviceRow({ name, value, total, color }){
+  const { delta } = useTrend(value);
+  const pct = (value / total) * 100;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[12px] mb-1">
+        <span className="flex items-center gap-1.5" style={{ color: 'var(--txt)' }}>
+          <span className="w-2 h-2 rounded-full" style={{ background: color, boxShadow: '0 0 6px ' + color }}></span>{name}
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
+          <span className="num text-[15px] font-bold" style={{ color }}>{value}</span>
+          <span className="w-9 text-right"><Delta delta={delta} size={10} invert={name !== '在线'} /></span>
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(20,60,110,.09)' }}>
+        <div className="h-full rounded-full" style={{ width: pct + '%', background: color, boxShadow: '0 0 6px ' + color, transition: 'width .8s ease' }}></div>
+      </div>
+    </div>
+  );
+}
+function DeviceCard({ d }){
+  const total = d.devices.online + d.devices.offline + d.devices.fault;
+  const rate = +((d.devices.online / total) * 100).toFixed(1);
+  const { hist, delta } = useTrend(rate);
+  return (
+    <GlowCard title="设备运行统计" en="Devices" className="flex-1"
+      extra={<div className="flex items-center gap-2 whitespace-nowrap"><Sparkline hist={hist} color="#0a93c9" w={56} h={20} /><span className="num text-[13px] font-bold" style={{ color: 'var(--cyan)' }}>{rate}%</span></div>}>
+      <div className="flex h-full items-center">
+        <div className="relative shrink-0" style={{ width: 138, height: 138 }}>
+          <OrbitRing size={132} />
+          <PieChart width={138} height={138}>
+            <Pie data={[
+              { name: '在线', value: d.devices.online }, { name: '离线', value: d.devices.offline }, { name: '故障', value: d.devices.fault },
+            ]} dataKey="value" cx="50%" cy="50%" innerRadius={42} outerRadius={58} paddingAngle={3} stroke="none" startAngle={90} endAngle={-270}>
+              {['#0a93c9', '#6f93b8', '#e24550'].map((c, i) => <Cell key={i} fill={c} style={{ filter: 'drop-shadow(0 0 4px ' + c + ')' }} />)}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="num text-[26px] font-bold glow-text" style={{ color: 'var(--cyan)' }}>{total}</div>
+            <div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>接入设备</div>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0 pl-3 pr-1 space-y-3">
+          <DeviceRow name="在线" value={d.devices.online} total={total} color="#0a93c9" />
+          <DeviceRow name="离线" value={d.devices.offline} total={total} color="#6f93b8" />
+          <DeviceRow name="故障" value={d.devices.fault} total={total} color="#e24550" />
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ====================== 能耗分项 ====================== */
+function EnergyRow({ idx, name, value, max, color }){
+  const { delta } = useTrend(value);
+  return <RankBar idx={idx} name={name} value={value} total={max} color={color} unit="kWh" delta={delta} />;
+}
+function EnergyCard({ d }){
+  const total = d.energy.reduce((a, b) => a + b.v, 0);
+  const max = Math.max(...d.energy.map((e) => e.v));
+  const { hist, delta } = useTrend(total);
+  const order = [...d.energy].sort((a, b) => b.v - a.v).map((e) => e.name);
+  return (
+    <GlowCard title="能耗分项用电统计" en="Energy" className="flex-1"
+      extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>kWh · 实时</span>}>
+      <div className="h-full flex flex-col">
+        <div className="flex items-center justify-between mb-2.5 pb-2.5" style={{ borderBottom: '1px solid rgba(20,60,110,.09)' }}>
+          <div>
+            <div className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>总用电负荷</div>
+            <div className="num text-[26px] font-bold glow-text leading-none mt-1" style={{ color: 'var(--cyan)' }}>{total.toLocaleString()}<span className="text-[12px] ml-1 font-medium" style={{ color: 'var(--txt-dim)' }}>kWh</span></div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <Sparkline hist={hist} color="#2b7fff" w={120} h={30} />
+            <Delta delta={delta} invert size={11} />
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col justify-around">
+          {d.energy.map((e) => (
+            <EnergyRow key={e.name} idx={order.indexOf(e.name)} name={e.name} value={e.v} max={max} color={e.color} />
+          ))}
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ---------------- 左面板 ---------------- */
+function LeftPanel({ d }){
+  return (
+    <div className="h-full flex flex-col gap-3">
+      <EnvCard d={d} />
+      <DeviceCard d={d} />
+      <EnergyCard d={d} />
+    </div>
+  );
+}
+
+/* ====================== 车位统计 ====================== */
+function ParkStat({ value, label, color }){
+  return (
+    <div className="text-center flex-1">
+      <div className="num text-[22px] font-bold leading-none glow-text" style={{ color }}>{value}</div>
+      <div className="text-[11px] mt-1" style={{ color: 'var(--txt-dim)' }}>{label}</div>
+    </div>
+  );
+}
+function ParkingCard({ d }){
+  const usedPct = +((d.parking.used / d.parking.total) * 100).toFixed(1);
+  const { delta } = useTrend(usedPct);
+  return (
+    <GlowCard title="车位统计" en="Parking" className="flex-1"
+      extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>周转 <b style={{ color: 'var(--cyan)' }}>2.4</b>/h</span>}>
+      <div className="h-full flex flex-col justify-center gap-2.5">
+        <div className="flex items-center">
+          <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
+            <OrbitRing size={116} />
+            <PieChart width={120} height={120}>
+              <Pie data={[{ value: usedPct }, { value: 100 - usedPct }]} dataKey="value" cx="50%" cy="50%"
+                startAngle={90} endAngle={-270} innerRadius={44} outerRadius={56} stroke="none" cornerRadius={6}>
+                <Cell fill="#2b7fff" style={{ filter: 'drop-shadow(0 0 6px #2b7fff)' }} />
+                <Cell fill="rgba(20,60,110,.09)" />
+              </Pie>
+            </PieChart>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="num text-[24px] font-bold glow-text" style={{ color: 'var(--blue)' }}>{Math.round(usedPct)}%</div>
+              <div className="flex items-center gap-1"><span className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>使用率</span><Delta delta={delta} size={9} invert /></div>
+            </div>
+          </div>
+          <div className="flex-1 flex pl-1">
+            <ParkStat value={d.parking.total} label="车位总数" color="#26588c" />
+            <ParkStat value={d.parking.used} label="已使用" color="#2b7fff" />
+            <ParkStat value={d.parking.free} label="空闲" color="#1fa85f" />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-[10px] mb-1.5" style={{ color: 'var(--txt-dim)' }}>
+            <span>实时车位占用</span><span className="num">● 已占 <b style={{ color: 'var(--blue)' }}>{Math.round(usedPct)}%</b></span>
+          </div>
+          <StallGrid used={d.parking.used} total={d.parking.total} />
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ====================== 安防报警 ====================== */
+function SecTile({ name, value, color }){
+  const { delta } = useTrend(value);
+  return (
+    <div className="rounded px-2 py-1.5" style={{ background: 'rgba(20,60,110,.06)', borderTop: '2px solid ' + color }}>
+      <div className="flex items-center justify-between">
+        <span className="num text-[17px] font-bold" style={{ color }}>{value}</span>
+        <Delta delta={delta} size={9} invert />
+      </div>
+      <div className="text-[10px] mt-0.5" style={{ color: 'var(--txt-dim)' }}>{name}</div>
+    </div>
+  );
+}
+function SecurityCard({ d }){
+  const today = d.securityCat.reduce((a, b) => a + b.v, 0);
+  return (
+    <GlowCard title="安防报警统计" en="Security" className="flex-[1.3]"
+      extra={<span className="num text-[11px] blink" style={{ color: 'var(--orange)' }}>● 今日 {today} 起</span>}>
+      <div className="h-full flex flex-col">
+        <div className="flex-1 min-h-0">
+          <AutoBox>{(w, h) => (
+            <AreaChart width={w} height={h} data={d.alarmTrend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ef8326" stopOpacity={.5} /><stop offset="100%" stopColor="#ef8326" stopOpacity={0} /></linearGradient>
+                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0a93c9" stopOpacity={.4} /><stop offset="100%" stopColor="#0a93c9" stopOpacity={0} /></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(20,60,110,.09)" vertical={false} />
+              <XAxis dataKey="t" tick={axisStyle} axisLine={{ stroke: 'rgba(255,255,255,.12)' }} tickLine={false} interval={2} />
+              <YAxis tick={axisStyle} axisLine={false} tickLine={false} width={28} />
+              <Tooltip cursor={{ stroke: 'rgba(43,127,255,.4)' }} />
+              <Area type="monotone" dataKey="入侵" stroke="#ef8326" strokeWidth={2} fill="url(#g1)" dot={false} />
+              <Area type="monotone" dataKey="设备" stroke="#0a93c9" strokeWidth={2} fill="url(#g2)" dot={false} />
+            </AreaChart>
+          )}</AutoBox>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5 mt-1.5">
+          {d.securityCat.map((s) => <SecTile key={s.name} name={s.name} value={s.v} color={s.color} />)}
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ====================== 工单诉求 ====================== */
+function WoChip({ name, value, color }){
+  const { delta } = useTrend(value);
+  return (
+    <div className="flex items-center gap-2.5 rounded px-2.5 py-2" style={{ background: 'rgba(20,60,110,.06)' }}>
+      <span className="w-1.5 h-7 rounded-full" style={{ background: color, boxShadow: '0 0 6px ' + color }}></span>
+      <div className="flex-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className="num text-[19px] font-bold" style={{ color }}>{value}</span>
+          <Delta delta={delta} size={9} />
+        </div>
+        <div className="text-[11px]" style={{ color: 'var(--txt-dim)' }}>{name}</div>
+      </div>
+    </div>
+  );
+}
+function WorkorderCard({ d }){
+  const totalO = d.workorder.done + d.workorder.undone;
+  return (
+    <GlowCard title="工单诉求统计" en="Work Orders" className="flex-1"
+      extra={<span className="num text-[11px]" style={{ color: 'var(--txt-dim)' }}>今日 {d.workorder.repair + d.workorder.inspect} 单</span>}>
+      <div className="flex h-full items-center gap-3">
+        <div className="shrink-0 flex flex-col items-center">
+          <RadialGauge value={d.workorder.done} max={totalO} label="工单完成率" sub={d.workorder.done + ' / ' + totalO} color="#1fa85f" />
+        </div>
+        <div className="flex-1 grid grid-cols-2 gap-2">
+          <WoChip name="报修工单" value={d.workorder.repair} color="#0a93c9" />
+          <WoChip name="巡检工单" value={d.workorder.inspect} color="#2b7fff" />
+          <WoChip name="已处理" value={d.workorder.done} color="#1fa85f" />
+          <WoChip name="未处理" value={d.workorder.undone} color="#ef8326" />
+        </div>
+      </div>
+    </GlowCard>
+  );
+}
+
+/* ====================== 机房 / 广播 简卡 ====================== */
+function MiniCards({ d }){
+  return (
+    <div className="flex gap-3" style={{ height: 100 }}>
+      <GlowCard title="机房环境" en="IDC" className="flex-1" bodyClass="!pt-1">
+        <div className="flex h-full items-center justify-around">
+          <div className="text-center"><div className="num text-[18px] font-bold glow-text" style={{ color: 'var(--cyan)' }}>{d.room.temp}<span className="text-[11px]">℃</span></div><div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>温度</div></div>
+          <div className="text-center"><div className="num text-[18px] font-bold" style={{ color: 'var(--blue)' }}>{d.room.humidity}<span className="text-[11px]">%</span></div><div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>湿度</div></div>
+          <div className="text-center"><div className="flex items-center gap-1 justify-center"><span className="w-1.5 h-1.5 rounded-full blink" style={{ background: 'var(--green)', boxShadow: '0 0 6px var(--green)' }}></span><span className="text-[14px] font-bold" style={{ color: 'var(--green)' }}>{d.room.status}</span></div><div className="text-[10px] mt-0.5" style={{ color: 'var(--txt-dim)' }}>{d.room.power}</div></div>
+        </div>
+      </GlowCard>
+      <GlowCard title="广播统计" en="PA" className="flex-1" bodyClass="!pt-1">
+        <div className="flex h-full items-center justify-around">
+          <div className="text-center"><div className="num text-[18px] font-bold" style={{ color: 'var(--cyan)' }}>{d.broadcast.zones}</div><div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>分区</div></div>
+          <div className="text-center"><div className="num text-[18px] font-bold glow-text" style={{ color: 'var(--green)' }}>{d.broadcast.playing}</div><div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>播放中</div></div>
+          <div className="text-center"><div className="num text-[18px] font-bold" style={{ color: 'var(--blue)' }}>{d.broadcast.volume}<span className="text-[11px]">%</span></div><div className="text-[10px]" style={{ color: 'var(--txt-dim)' }}>音量</div></div>
+        </div>
+      </GlowCard>
+    </div>
+  );
+}
+
+/* ---------------- 右面板 ---------------- */
+function RightPanel({ d }){
+  return (
+    <div className="h-full flex flex-col gap-3">
+      <ParkingCard d={d} />
+      <SecurityCard d={d} />
+      <WorkorderCard d={d} />
+      <MiniCards d={d} />
+    </div>
+  );
+}
+
+Object.assign(window, { LeftPanel, RightPanel });
+
+
+/* ============================================================
+   IBMS 大屏 — 概览模式 Cyber HUD（首屏大气简洁版）
+   ============================================================ */
+
+/* 单个浮动 KPI 读数 */
+function HudKpi({ side, accent, label, en, value, unit, hist, delta, deltaInvert, foot }){
+  const right = side === 'r';
+  return (
+    <div className={'kpi ' + (right ? 'r' : 'l') + ' flex flex-col ' + (right ? 'items-end text-right' : 'items-start text-left')}
+      style={{ '--accent': accent, padding: right ? '10px 16px 10px 22px' : '10px 22px 10px 16px',
+        textShadow: '0 1px 2px rgba(255,255,255,.7)',
+        background: 'radial-gradient(130% 150% at ' + (right ? '100%' : '0%') + ' 50%, rgba(255,255,255,.5), transparent 74%)' }}>
+      <div className={'flex items-center gap-2 ' + (right ? 'flex-row-reverse' : '')}>
+        <span style={{ width: 16, height: 2, background: accent, boxShadow: '0 0 8px ' + accent }}></span>
+        <span className="text-[14px] tracking-[3px] font-medium whitespace-nowrap" style={{ color: 'var(--txt)' }}>{label}</span>
+        <span className="title-en whitespace-nowrap">{en}</span>
+      </div>
+      <div className="num font-bold leading-none mt-2.5 whitespace-nowrap" style={{ fontSize: 52, color: accent, textShadow: '0 2px 6px rgba(255,255,255,.6)' }}>
+        {value}{unit ? <span className="font-semibold ml-1" style={{ fontSize: 17 }}>{unit}</span> : null}
+      </div>
+      {(hist || delta != null || foot) ? (
+        <div className={'flex items-center gap-2.5 mt-2.5 whitespace-nowrap ' + (right ? 'flex-row-reverse' : '')}>
+          {hist ? <Sparkline hist={hist} color={accent} w={118} h={26} /> : null}
+          {delta != null ? <Delta delta={delta} invert={deltaInvert} size={12} /> : null}
+          {foot ? <span className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{foot}</span> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* —— 各 KPI（自带趋势） —— */
+function KpiDevices({ d, side }){
+  const total = d.devices.online + d.devices.offline + d.devices.fault;
+  const rate = +((d.devices.online / total) * 100).toFixed(1);
+  const { hist, delta } = useTrend(rate);
+  return <HudKpi side={side} accent="#0a93c9" label="设备在线率" en="DEVICES ONLINE" value={rate} unit="%" hist={hist} delta={delta} foot={'接入 ' + total} />;
+}
+function KpiEnergy({ d, side }){
+  const total = d.energy.reduce((a, b) => a + b.v, 0);
+  const { hist, delta } = useTrend(total);
+  return <HudKpi side={side} accent="#8a4fd6" label="实时能耗" en="LOAD kWh" value={total.toLocaleString()} unit="kWh" hist={hist} delta={delta} deltaInvert foot="较昨日" />;
+}
+function KpiEnv({ d, side }){
+  const { hist, delta } = useTrend(d.env.pm25);
+  return <HudKpi side={side} accent="#1fa85f" label="空气质量" en="AIR · PM2.5" value={d.env.pm25} unit="μg/m³" hist={hist} delta={delta} deltaInvert foot={d.env.temp + '℃ · ' + d.env.humidity + '%RH'} />;
+}
+function KpiParking({ d, side }){
+  const pct = +((d.parking.used / d.parking.total) * 100).toFixed(1);
+  const { hist, delta } = useTrend(pct);
+  return <HudKpi side={side} accent="#2b7fff" label="车位使用率" en="PARKING" value={Math.round(pct)} unit="%" hist={hist} delta={delta} deltaInvert foot={d.parking.used + ' / ' + d.parking.total} />;
+}
+function KpiSecurity({ d, side }){
+  const today = d.securityCat.reduce((a, b) => a + b.v, 0);
+  const { hist, delta } = useTrend(today);
+  return <HudKpi side={side} accent="#e23a82" label="今日报警" en="SECURITY" value={today} unit="起" hist={hist} delta={delta} deltaInvert foot="实时布防中" />;
+}
+function KpiWorkorder({ d, side }){
+  const totalO = d.workorder.done + d.workorder.undone;
+  const rate = +((d.workorder.done / totalO) * 100).toFixed(1);
+  const { hist, delta } = useTrend(rate);
+  return <HudKpi side={side} accent="#1fa85f" label="工单完成率" en="WORK ORDERS" value={Math.round(rate)} unit="%" hist={hist} delta={delta} foot={d.workorder.done + ' / ' + totalO} />;
+}
+
+/* —— 底部数据滚动条 —— */
+function Ticker({ d }){
+  const items = [
+    ['CO₂', d.env.co2 + ' ppm'],
+    ['机房温度', d.room.temp + ' ℃'],
+    ['机房', d.room.status + ' · ' + d.room.power],
+    ['广播分区', d.broadcast.playing + ' / ' + d.broadcast.zones],
+    ['离线设备', d.devices.offline + ' 台'],
+    ['故障设备', d.devices.fault + ' 台'],
+    ['接入点', '32,860'],
+    ['子系统', '14 个'],
+    ['空闲车位', d.parking.free + ' 位'],
+  ];
+  const seq = [...items, ...items];
+  return (
+    <div className="absolute left-0 right-0 overflow-hidden" style={{ top: 10, height: 24, maskImage: 'linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)', WebkitMaskImage: 'linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)' }}>
+      <div className="ticker-track">
+        {seq.map((it, i) => (
+          <span key={i} className="inline-flex items-center gap-2 text-[12px]">
+            <span style={{ width: 5, height: 5, transform: 'rotate(45deg)', background: i % 3 === 1 ? 'var(--magenta)' : 'var(--cyan)', boxShadow: '0 0 6px currentColor' }}></span>
+            <span style={{ color: 'var(--txt-dim)' }}>{it[0]}</span>
+            <span className="num font-bold" style={{ color: 'var(--cyan)' }}>{it[1]}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* —— 概览总览叠加层 —— */
+function OverviewHUD({ d }){
+  return (
+    <div className="absolute inset-0 z-20" style={{ pointerEvents: 'none' }}>
+      <Ticker d={d} />
+      {/* 左列 */}
+      <div className="absolute flex flex-col justify-between" style={{ left: 56, top: 70, bottom: 96, width: 280 }}>
+        <KpiDevices d={d} side="l" />
+        <KpiEnergy d={d} side="l" />
+        <KpiEnv d={d} side="l" />
+      </div>
+      {/* 右列 */}
+      <div className="absolute flex flex-col justify-between items-end" style={{ right: 56, top: 70, bottom: 96, width: 280 }}>
+        <KpiParking d={d} side="r" />
+        <KpiSecurity d={d} side="r" />
+        <KpiWorkorder d={d} side="r" />
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { OverviewHUD });
+
+
+/* ============================================================
+   IBMS 大屏 — 顶栏 / 主场景(数字孪生) / 弹窗
+   ============================================================ */
+
+/* ---------------- 顶栏 ---------------- */
+function TopBar({ d, now, onOpen, alarmCount, msgCount }){
+  const date = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const time = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+
+  const Entry = ({ icon, label, badge, onClick, color }) => (
+    <button onClick={onClick}
+      className="relative flex items-center gap-2 px-3 py-1.5 rounded-md transition hover:bg-white/5"
+      style={{ border: '1px solid rgba(43,127,255,.3)' }}>
+      <span className="text-[16px]" style={{ filter: 'drop-shadow(0 0 4px ' + color + ')' }}>{icon}</span>
+      <span className="text-[13px]" style={{ color: 'var(--txt)' }}>{label}</span>
+      {badge > 0 && (
+        <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] num font-bold rounded-full text-white"
+          style={{ background: 'var(--red)', boxShadow: '0 0 8px var(--red)' }}>{badge}</span>
+      )}
+    </button>
+  );
+
+  return (
+    <div className="relative h-[74px] flex items-center px-5 shrink-0">
+      {/* 装饰底线 */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(43,127,255,.5),transparent)' }}></div>
+
+      {/* 左：天气 + 时间 */}
+      <div className="flex items-center gap-3 w-[420px]">
+        <div className="flex items-center gap-2 glass px-3 py-1.5" style={{ borderRadius: 8 }}>
+          <span className="text-[24px]">{d.weather.icon}</span>
+          <div className="leading-tight">
+            <div className="text-[13px] font-medium" style={{ color: 'var(--txt)' }}>{d.weather.city} · {d.weather.desc}</div>
+            <div className="num text-[15px] font-bold" style={{ color: 'var(--cyan)' }}>{d.weather.temp}℃</div>
+          </div>
+        </div>
+        <div className="leading-tight">
+          <div className="num text-[22px] font-bold" style={{ color: 'var(--cyan)' }}>{time}</div>
+          <div className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{date} {week}</div>
+        </div>
+      </div>
+
+      {/* 中：标题 */}
+      <div className="flex-1 flex flex-col items-center justify-center -mt-1">
+        <h1 className="text-[34px] font-black tracking-[6px] glitch">
+          IBMS 智慧建筑集成管理平台
+        </h1>
+        <div className="num text-[11px] tracking-[5px]" style={{ color: 'var(--txt-dim)' }}>
+          INTELLIGENT BUILDING MANAGEMENT SYSTEM
+        </div>
+      </div>
+
+      {/* 右：入口 */}
+      <div className="flex items-center gap-2.5 w-[420px] justify-end">
+        <Entry icon="✉" label="消息中心" badge={msgCount} color="#0a93c9" onClick={() => onOpen('msg')} />
+        <Entry icon="⚠" label="报警中心" badge={alarmCount} color="#ef8326" onClick={() => onOpen('alarm')} />
+        <button className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full transition hover:bg-white/5" style={{ border: '1px solid rgba(43,127,255,.3)' }}>
+          <span className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold text-white" style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)' }}>管</span>
+          <span className="text-[13px]" style={{ color: 'var(--txt)' }}>管理员</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 主场景：数字孪生楼宇 ---------------- */
+const SCENES = ['全景VR', '二维组态', 'BIM三维', 'GIS地图'];
+
+function MainScene({ overview, d, onToggle }){
+  const [scene, setScene] = useState('BIM三维');
+  const mountRef = useRef(null);
+  const engineRef = useRef(null);
+
+  // 初始化 Three.js 城市
+  useEffect(() => {
+    if (!mountRef.current || typeof THREE === 'undefined') return;
+    const engine = createCity3D(mountRef.current);
+    engineRef.current = engine;
+    return () => { engine.dispose(); engineRef.current = null; };
+  }, []);
+
+  // 切换视角预设
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.setScene(scene);
+  }, [scene]);
+
+  // 面板展开/收起后容器尺寸变化，重算渲染尺寸
+  useEffect(() => {
+    const t = setTimeout(() => { engineRef.current && engineRef.current.resize(); }, 80);
+    const t2 = setTimeout(() => { engineRef.current && engineRef.current.resize(); }, 560);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [overview]);
+
+  return (
+    <div className="relative h-full glass overflow-hidden" style={{ borderRadius: 10 }}>
+      {/* Three.js 数字孪生画布 */}
+      <div ref={mountRef} className="absolute inset-0" style={{ borderRadius: 10, overflow: 'hidden' }}></div>
+
+      {/* 赛博叠加层：暗角 + 扫描线 + 扫描光带 */}
+      <div className="vignette"></div>
+      <div className="scanlines"></div>
+      <div className="scan-bar"></div>
+
+      {/* 顶部渐隐遮罩，增强景深 */}
+      <div className="absolute inset-x-0 top-0 h-24 pointer-events-none z-10" style={{ background: 'linear-gradient(180deg, rgba(235,244,255,.5), transparent)' }}></div>
+
+      {/* HUD 角标框 */}
+      <div className="hud-bracket tl"></div>
+      <div className="hud-bracket tr"></div>
+      <div className="hud-bracket bl"></div>
+      <div className="hud-bracket br"></div>
+
+      {/* 概览模式：浮动 KPI HUD */}
+      <div className="transition-opacity duration-500" style={{ opacity: overview ? 1 : 0, pointerEvents: overview ? 'auto' : 'none' }}>
+        {overview ? <OverviewHUD d={d} /> : null}
+      </div>
+
+      {/* 详情模式角标信息 */}
+      {!overview ? (
+      <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
+        <div className="glass px-3 py-1.5 num text-[12px]" style={{ borderRadius: 6, color: 'var(--txt-dim)' }}>
+          建筑面积 <b style={{ color: 'var(--cyan)' }}>186,400</b> ㎡ · 楼宇 <b style={{ color: 'var(--cyan)' }}>3</b> 栋
+        </div>
+        <div className="glass px-3 py-1.5 num text-[12px]" style={{ borderRadius: 6, color: 'var(--txt-dim)' }}>
+          系统集成 <b style={{ color: 'var(--cyan)' }}>14</b> 个子系统 · 接入点 <b style={{ color: 'var(--cyan)' }}>32,860</b>
+        </div>
+      </div>
+      ) : null}
+
+      {/* 模式切换按钮 */}
+      <button onClick={onToggle}
+        className="absolute top-3 right-3 z-30 glass px-3 py-1.5 text-[13px] whitespace-nowrap transition hover:bg-white/10"
+        style={{ borderRadius: 6, color: overview ? 'var(--magenta)' : 'var(--cyan)' }}>
+        {overview ? '▤ 详情面板' : '▤ 概览模式'}
+      </button>
+
+      {/* 底部场景切换 */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 glass px-2 py-1.5 z-30" style={{ borderRadius: 10 }}>
+        {SCENES.map((s) => (
+          <button key={s} onClick={() => setScene(s)}
+            className="px-4 py-1.5 text-[13px] rounded-md transition"
+            style={scene === s
+              ? { background: 'linear-gradient(135deg,#2b7fff,#0a93c9)', color: '#04101f', fontWeight: 700, boxShadow: '0 0 14px rgba(43,127,255,.4), inset 0 0 0 1px rgba(226,58,130,.3)' }
+              : { color: 'var(--txt-dim)' }}>
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 弹窗 ---------------- */
+function Modal({ kind, onClose }){
+  if (!kind) return null;
+  const isAlarm = kind === 'alarm';
+  const levelColor = { 紧急: '#e24550', 重要: '#ef8326', 一般: '#d99a16' };
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(150,185,225,.45)', backdropFilter: 'blur(2px)' }} onClick={onClose}>
+      <div className="glass flex flex-col" style={{ width: 780, maxHeight: 620, borderRadius: 10 }} onClick={(e) => e.stopPropagation()}>
+        <div className="card-title">
+          <span className="dot" style={isAlarm ? { background: 'var(--orange)', boxShadow: '0 0 8px var(--orange)' } : {}}></span>
+          <h3>{isAlarm ? '报警中心' : '消息中心'}</h3>
+          <span className="title-en">{isAlarm ? 'Alarm Center' : 'Message Center'}</span>
+          <button onClick={onClose} className="ml-auto w-7 h-7 rounded flex items-center justify-center text-[16px] transition hover:bg-white/10" style={{ color: 'var(--txt-dim)' }}>✕</button>
+        </div>
+
+        <div className="overflow-y-auto scrollbar px-3.5 py-3 flex-1">
+          {isAlarm ? (
+            <table className="w-full text-[13px]" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+              <thead>
+                <tr style={{ color: 'var(--txt-dim)' }} className="text-left text-[12px]">
+                  <th className="px-3 font-medium">时间</th><th className="px-3 font-medium">设备</th>
+                  <th className="px-3 font-medium">类型</th><th className="px-3 font-medium">级别</th>
+                  <th className="px-3 font-medium">报警内容</th><th className="px-3 font-medium text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ALARM_LIST.map((a) => (
+                  <tr key={a.id} style={{ background: 'rgba(20,60,110,.05)' }}>
+                    <td className="px-3 py-2.5 num rounded-l" style={{ color: 'var(--cyan)' }}>{a.time}</td>
+                    <td className="px-3 py-2.5" style={{ color: 'var(--txt)' }}>{a.dev}</td>
+                    <td className="px-3 py-2.5" style={{ color: 'var(--txt-dim)' }}>{a.type}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ color: levelColor[a.level], background: levelColor[a.level] + '22' }}>{a.level}</span>
+                    </td>
+                    <td className="px-3 py-2.5 max-w-[220px]" style={{ color: 'var(--txt-dim)' }}>{a.desc}</td>
+                    <td className="px-3 py-2.5 rounded-r text-center">
+                      <button className="px-3 py-1 rounded text-[12px] font-medium text-[#04101f]" style={{ background: 'linear-gradient(135deg,#2b7fff,#0a93c9)' }}>处理</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="space-y-2">
+              {MSG_LIST.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 px-3 py-3 rounded" style={{ background: 'rgba(20,60,110,.05)' }}>
+                  <span className="w-9 h-9 rounded-full flex items-center justify-center text-[13px]" style={{ background: 'rgba(43,127,255,.16)', color: 'var(--cyan)' }}>{m.tag}</span>
+                  <div className="flex-1">
+                    <div className="text-[14px]" style={{ color: 'var(--txt)' }}>{m.title}</div>
+                    <div className="text-[12px] mt-0.5" style={{ color: 'var(--txt-dim)' }}>{m.from}</div>
+                  </div>
+                  <span className="num text-[12px]" style={{ color: 'var(--txt-dim)' }}>{m.time}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TopBar, MainScene, Modal });
+
+
+/* ============================================================
+   IBMS 大屏 — 应用根：实时定时器 + 布局组装
+   ============================================================ */
+function App(){
+  const [d, setD] = useState(initialData);
+  const [now, setNow] = useState(new Date());
+  const [modal, setModal] = useState(null);
+  const [overview, setOverview] = useState(false);
+
+  // 时钟
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 实时数据轻微跳动
+  useEffect(() => {
+    const t = setInterval(() => {
+      setD((p) => {
+        const onlineDelta = Math.round((Math.random() - 0.5) * 6);
+        return {
+          ...p,
+          env: {
+            temp: jitter(p.env.temp, 0.8, 18, 30, 1),
+            humidity: jitter(p.env.humidity, 4, 30, 80, 0),
+            pm25: jitter(p.env.pm25, 6, 10, 120, 0),
+            co2: jitter(p.env.co2, 40, 400, 1200, 0),
+          },
+          devices: {
+            online: Math.max(1240, Math.min(1320, p.devices.online + onlineDelta)),
+            offline: jitter(p.devices.offline, 6, 60, 130, 0),
+            fault: jitter(p.devices.fault, 3, 8, 40, 0),
+          },
+          energy: p.energy.map((e) => ({ ...e, v: jitter(e.v, 24, 60, 700, 0) })),
+          parking: (() => {
+            const used = jitter(p.parking.used, 14, 600, p.parking.total, 0);
+            return { ...p.parking, used, free: p.parking.total - used };
+          })(),
+          workorder: {
+            repair: jitter(p.workorder.repair, 2, 30, 60, 0),
+            inspect: jitter(p.workorder.inspect, 2, 50, 90, 0),
+            done: jitter(p.workorder.done, 2, 80, 120, 0),
+            undone: jitter(p.workorder.undone, 2, 5, 30, 0),
+          },
+          room: { ...p.room, temp: jitter(p.room.temp, 0.5, 18, 28, 1), humidity: jitter(p.room.humidity, 3, 35, 60, 0) },
+          broadcast: { ...p.broadcast, playing: jitter(p.broadcast.playing, 2, 0, 12, 0), volume: jitter(p.broadcast.volume, 4, 40, 90, 0) },
+          alarmTrend: p.alarmTrend.map((x) => ({
+            ...x,
+            入侵: jitter(x.入侵, 2, 0, 12, 0),
+            设备: jitter(x.设备, 2, 0, 12, 0),
+          })),
+          securityCat: p.securityCat.map((s) => ({ ...s, v: jitter(s.v, 2, 0, 30, 0) })),
+        };
+      });
+    }, 2200);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="w-[1920px] h-[1080px] flex flex-col text-[var(--txt)]">
+      <TopBar d={d} now={now} alarmCount={ALARM_LIST.length} msgCount={MSG_LIST.length} onOpen={setModal} />
+
+      <div className="flex-1 min-h-0 grid gap-3.5 px-4 py-3.5"
+        style={{ gridTemplateColumns: overview ? '0px minmax(0,1fr) 0px' : '420px minmax(0,1fr) 420px' }}>
+        {/* 左面板 */}
+        <div className="overflow-hidden transition-opacity duration-500" style={{ opacity: overview ? 0 : 1 }}>
+          <div style={{ width: 420 }} className="h-full"><LeftPanel d={d} /></div>
+        </div>
+
+        {/* 中央主场景 */}
+        <div className="min-w-0"><MainScene overview={overview} d={d} onToggle={() => setOverview((v) => !v)} /></div>
+
+        {/* 右面板 */}
+        <div className="overflow-hidden transition-opacity duration-500" style={{ opacity: overview ? 0 : 1 }}>
+          <div style={{ width: 420 }} className="h-full"><RightPanel d={d} /></div>
+        </div>
+      </div>
+
+      <Modal kind={modal} onClose={() => setModal(null)} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+  </script>
+</body>
+</html>
