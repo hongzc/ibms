@@ -8,13 +8,15 @@ import (
 
 // Store 聚合所有数据访问对象，供 service 层依赖。
 type Store struct {
-	User UserStore
+	User  UserStore
+	Scada ScadaStore
 }
 
 // New 基于已打开的数据库连接构建 Store。
 func New(db *sql.DB) *Store {
 	return &Store{
-		User: &userStore{db: db},
+		User:  &userStore{db: db},
+		Scada: &scadaStore{db: db},
 	}
 }
 
@@ -38,6 +40,16 @@ CREATE TABLE IF NOT EXISTS users (
 	name       TEXT NOT NULL,
 	email      TEXT NOT NULL UNIQUE,
 	created_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scada_projects (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	name       TEXT NOT NULL,
+	graph      TEXT NOT NULL DEFAULT '',
+	updated_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS scada_publish (
+	k          INTEGER PRIMARY KEY CHECK(k = 1),
+	project_id INTEGER NOT NULL
 );`
 	_, err := db.Exec(schema)
 	return err

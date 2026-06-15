@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>组态编辑器 — IBMS 智慧建筑集成管理平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@antv/x6@2/dist/index.js"></script>
+<script src="https://unpkg.com/@antv/x6-plugin-selection@2/dist/index.js"></script>
+<script src="https://unpkg.com/@antv/x6-plugin-snapline@2/dist/index.js"></script>
+<script src="https://unpkg.com/@antv/x6-plugin-keyboard@2/dist/index.js"></script>
+<script src="https://unpkg.com/@antv/x6-plugin-history@2/dist/index.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg-0:#bcd9fb; --cyan:#0a93c9; --blue:#2b7fff; --orange:#ef8326;
+    --red:#e24550; --green:#1fa85f; --txt:#123c6e; --txt-dim:#5b7ea6;
+    --line:rgba(43,127,255,.34); --panel:rgba(255,255,255,.62);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    font-family:'Noto Sans SC','Microsoft YaHei',sans-serif; color:var(--txt);
+    background:linear-gradient(180deg,#a9ccf2 0%,#c2dcfb 46%,#dcecff 100%);
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .num{ font-family:'Oxanium',sans-serif; font-variant-numeric:tabular-nums; }
+  .glass{
+    background:linear-gradient(160deg, rgba(255,255,255,.55), rgba(220,238,255,.32));
+    border:1px solid rgba(120,170,230,.4);
+    backdrop-filter:blur(16px) saturate(1.3); -webkit-backdrop-filter:blur(16px) saturate(1.3);
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:7px;
+    font-size:13px; font-weight:500; cursor:pointer; transition:all .15s;
+    border:1px solid var(--line); color:var(--txt); background:rgba(255,255,255,.4);
+  }
+  .btn:hover{ background:rgba(43,127,255,.12); }
+  .btn.primary{ background:linear-gradient(135deg,#2b7fff,#0a93c9); color:#fff; border-color:transparent; }
+  .btn.primary:hover{ filter:brightness(1.06); }
+  .btn.on{ background:linear-gradient(135deg,#1fa85f,#0a93c9); color:#fff; border-color:transparent; }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .palette-item{
+    display:flex; flex-direction:column; align-items:center; gap:4px; padding:10px 6px;
+    border-radius:9px; border:1px solid var(--line); background:rgba(255,255,255,.45);
+    cursor:grab; transition:all .15s; user-select:none;
+  }
+  .palette-item:hover{ background:rgba(43,127,255,.14); transform:translateY(-1px); }
+  .palette-item:active{ cursor:grabbing; }
+  .fld{ width:100%; padding:6px 9px; border-radius:6px; border:1px solid var(--line);
+    background:rgba(255,255,255,.7); font-size:13px; color:var(--txt); outline:none; }
+  .fld:focus{ border-color:var(--blue); }
+  .lbl{ font-size:12px; color:var(--txt-dim); margin-bottom:4px; display:block; }
+  .scrollbar::-webkit-scrollbar{ width:7px; height:7px; }
+  .scrollbar::-webkit-scrollbar-thumb{ background:rgba(43,127,255,.32); border-radius:4px; }
+
+  /* X6 画布与运行态 */
+  #paper{ width:100%; height:100%; }
+  .paper-wrap.run #paper{ cursor:default; }
+  .paper-wrap.run .x6-port-body{ display:none !important; }
+  .paper-wrap.run .x6-node{ cursor:pointer; }
+  .scada-spin{ transform-origin:center; transform-box:fill-box; animation:scadaSpin 1.1s linear infinite; }
+  @keyframes scadaSpin{ to{ transform:rotate(360deg); } }
+  @keyframes pipeFlow{ to{ stroke-dashoffset:-28; } }
+  .pipe-flow{ animation:pipeFlow .7s linear infinite; }
+
+  .modal-mask{ position:fixed; inset:0; background:rgba(120,160,210,.4); backdrop-filter:blur(2px);
+    display:flex; align-items:center; justify-content:center; z-index:50; }
+  .toast{ position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:60;
+    padding:9px 18px; border-radius:8px; font-size:13px; color:#fff;
+    background:linear-gradient(135deg,#2b7fff,#0a93c9); box-shadow:0 6px 20px rgba(43,127,255,.4); }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ============================================================
+   图元（节点 / 连线）注册 —— 天空蓝主题
+   ============================================================ */
+const C = { blue:'#2b7fff', cyan:'#0a93c9', green:'#1fa85f', red:'#e24550', gray:'#9bb3cf', txt:'#123c6e' };
+
+const PORTS = {
+  groups: { g: { position:'absolute', attrs:{ circle:{ r:5, magnet:true, fill:'#fff', stroke:C.blue, strokeWidth:1.5 } } } },
+  items: [
+    { id:'t', group:'g', args:{ x:'50%', y:0 } },
+    { id:'r', group:'g', args:{ x:'100%', y:'50%' } },
+    { id:'b', group:'g', args:{ x:'50%', y:'100%' } },
+    { id:'l', group:'g', args:{ x:0, y:'50%' } },
+  ],
+};
+
+function registerShapes(){
+  const G = X6.Graph;
+  // 水泵
+  G.registerNode('scada-pump', {
+    width:64, height:64, ports: PORTS,
+    markup:[ {tagName:'circle',selector:'body'}, {tagName:'path',selector:'rotor'}, {tagName:'text',selector:'label'} ],
+    attrs:{
+      body:{ cx:32, cy:26, r:19, fill:'#eef4ff', stroke:C.blue, strokeWidth:2 },
+      rotor:{ d:'M32,11 L32,41 M17,26 L47,26', stroke:C.blue, strokeWidth:3, strokeLinecap:'round', fill:'none' },
+      label:{ x:32, y:58, textAnchor:'middle', fontSize:11, fill:C.txt, text:'水泵' },
+    },
+  }, true);
+  // 风机
+  G.registerNode('scada-fan', {
+    width:64, height:64, ports: PORTS,
+    markup:[ {tagName:'rect',selector:'body'}, {tagName:'path',selector:'rotor'}, {tagName:'text',selector:'label'} ],
+    attrs:{
+      body:{ x:8, y:6, width:48, height:40, rx:6, fill:'#eef4ff', stroke:C.blue, strokeWidth:2 },
+      rotor:{ d:'M32,10 L32,42 M16,26 L48,26 M21,15 L43,37 M43,15 L21,37', stroke:C.blue, strokeWidth:2.4, strokeLinecap:'round', fill:'none' },
+      label:{ x:32, y:58, textAnchor:'middle', fontSize:11, fill:C.txt, text:'风机' },
+    },
+  }, true);
+  // 阀门
+  G.registerNode('scada-valve', {
+    width:64, height:56, ports: PORTS,
+    markup:[ {tagName:'path',selector:'body'}, {tagName:'text',selector:'label'} ],
+    attrs:{
+      body:{ d:'M10,10 L10,38 L32,24 Z M54,10 L54,38 L32,24 Z', fill:'#eef4ff', stroke:C.blue, strokeWidth:2, strokeLinejoin:'round' },
+      label:{ x:32, y:52, textAnchor:'middle', fontSize:11, fill:C.txt, text:'阀门' },
+    },
+  }, true);
+  // 冷热源机组
+  G.registerNode('scada-chiller', {
+    width:120, height:60, ports: PORTS,
+    markup:[ {tagName:'rect',selector:'body'}, {tagName:'text',selector:'label'} ],
+    attrs:{
+      body:{ x:1, y:1, width:118, height:58, rx:9, fill:'#e7f0ff', stroke:C.blue, strokeWidth:2 },
+      label:{ x:60, y:34, textAnchor:'middle', fontSize:13, fontWeight:700, fill:C.txt, text:'冷热源机组' },
+    },
+  }, true);
+  // 数显框
+  G.registerNode('scada-vdisp', {
+    width:104, height:60, ports: PORTS,
+    markup:[ {tagName:'rect',selector:'body'}, {tagName:'text',selector:'cap'}, {tagName:'text',selector:'val'} ],
+    attrs:{
+      body:{ x:1, y:1, width:102, height:58, rx:8, fill:'rgba(255,255,255,.85)', stroke:C.cyan, strokeWidth:1.5 },
+      cap:{ x:52, y:17, textAnchor:'middle', fontSize:11, fill:'#5b7ea6', text:'数值' },
+      val:{ x:52, y:42, textAnchor:'middle', fontSize:20, fontFamily:'Oxanium', fontWeight:700, fill:C.cyan, text:'--' },
+    },
+  }, true);
+  // 状态指示灯
+  G.registerNode('scada-indicator', {
+    width:44, height:44, ports: PORTS,
+    markup:[ {tagName:'circle',selector:'body'}, {tagName:'text',selector:'label'} ],
+    attrs:{
+      body:{ cx:22, cy:15, r:11, fill:C.gray, stroke:'#fff', strokeWidth:2 },
+      label:{ x:22, y:38, textAnchor:'middle', fontSize:11, fill:C.txt, text:'状态' },
+    },
+  }, true);
+  // 文本
+  G.registerNode('scada-text', {
+    width:96, height:26,
+    markup:[ {tagName:'text',selector:'label'} ],
+    attrs:{ label:{ x:48, y:17, textAnchor:'middle', fontSize:14, fontWeight:500, fill:C.txt, text:'文本标签' } },
+  }, true);
+  // 管道
+  G.registerEdge('scada-pipe', {
+    zIndex:-1,
+    attrs:{ line:{ stroke:'#9fbbe0', strokeWidth:6, strokeLinecap:'round', targetMarker:null } },
+  }, true);
+}
+
+// 图元面板定义
+const PALETTE = [
+  { kind:'scada-pump', name:'水泵', icon:'⊚', bind:'status' },
+  { kind:'scada-fan', name:'风机', icon:'✲', bind:'status' },
+  { kind:'scada-valve', name:'阀门', icon:'▷◁', bind:'status' },
+  { kind:'scada-chiller', name:'冷热源机组', icon:'❄', bind:'status' },
+  { kind:'scada-vdisp', name:'数显框', icon:'#', bind:'number' },
+  { kind:'scada-indicator', name:'指示灯', icon:'●', bind:'status' },
+  { kind:'scada-text', name:'文本', icon:'T', bind:'none' },
+];
+const KIND_META = Object.fromEntries(PALETTE.map(p => [p.kind, p]));
+const labelSelector = (kind) => kind === 'scada-vdisp' ? 'cap' : 'label';
+
+/* ============================================================
+   运行态视觉应用
+   ============================================================ */
+function paintNode(node, st){
+  const kind = (node.getData() || {}).kind;
+  const stroke = st==='fault' ? C.red : st==='run' ? C.green : C.gray;
+  const fill   = st==='fault' ? '#fbe4e6' : st==='run' ? '#e3f7ec' : '#eef2f7';
+  if (kind === 'scada-indicator'){ node.attr('body/fill', stroke); return; }
+  node.attr('body/stroke', stroke);
+  node.attr('body/fill', fill);
+  if (kind === 'scada-pump' || kind === 'scada-fan')
+    node.attr('rotor/class', st==='run' ? 'scada-spin' : null);
+}
+function resetNode(node){
+  const kind = (node.getData() || {}).kind;
+  if (kind === 'scada-indicator'){ node.attr('body/fill', C.gray); return; }
+  if (kind === 'scada-vdisp'){ node.attr('val/text', '--'); node.attr('body/stroke', C.cyan); return; }
+  if (kind === 'scada-text') return;
+  node.attr('body/stroke', C.blue);
+  node.attr('body/fill', kind==='scada-chiller' ? '#e7f0ff' : '#eef4ff');
+  if (kind === 'scada-pump' || kind === 'scada-fan') node.attr('rotor/class', null);
+}
+
+/* ============================================================
+   主组件
+   ============================================================ */
+function App(){
+  const paperRef = useRef(null);
+  const graphRef = useRef(null);
+  const modeRef = useRef('edit');
+  const valuesRef = useRef({});
+
+  const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState('edit');
+  const [projectId, setProjectId] = useState(null);
+  const [projectName, setProjectName] = useState('未命名组态');
+  const [datapoints, setDatapoints] = useState([]);
+  const [sel, setSel] = useState(null);       // {id,kind,label,binding,unit}
+  const [projects, setProjects] = useState([]);
+  const [dlg, setDlg] = useState(null);       // 'open' | 'new'
+  const [newName, setNewName] = useState('');
+  const [toast, setToast] = useState('');
+
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 1800); };
+
+  // 初始化画布
+  useEffect(() => {
+    if (typeof X6 === 'undefined') { console.error('X6 未加载'); return; }
+    registerShapes();
+    const graph = new X6.Graph({
+      container: paperRef.current,
+      autoResize: true,
+      background: { color: 'transparent' },
+      grid: { visible:true, size:10, type:'dot', args:{ color:'rgba(43,127,255,.16)', thickness:1 } },
+      panning: { enabled:true, eventTypes:['rightMouseDown'] },
+      mousewheel: { enabled:true, modifiers:['ctrl','meta'], minScale:0.4, maxScale:2 },
+      interacting: () => modeRef.current === 'edit',
+      connecting: {
+        snap:true, allowBlank:false, allowLoop:false, allowNode:false, allowMulti:true,
+        highlight:true, router:'manhattan', connector:'rounded',
+        createEdge(){ return graph.createEdge({ shape:'scada-pipe' }); },
+        validateConnection({ sourceMagnet, targetMagnet }){ return !!sourceMagnet && !!targetMagnet; },
+      },
+      highlighting: {
+        magnetAdsorbed: { name:'stroke', args:{ attrs:{ stroke:C.green, strokeWidth:3 } } },
+      },
+    });
+    graphRef.current = graph;
+
+    // 插件（防御式加载，缺失不影响核心）
+    const use = (g, cls, opts) => { try { if (window[g] && window[g][cls]) graph.use(new window[g][cls](opts)); } catch(e){ console.warn('plugin', cls, e); } };
+    use('X6PluginSelection','Selection',{ enabled:true, rubberband:true, showNodeSelectionBox:true, modifiers:'shift', pointerEvents:'none' });
+    use('X6PluginSnapline','Snapline',{ enabled:true });
+    use('X6PluginKeyboard','Keyboard',{ enabled:true });
+    use('X6PluginHistory','History',{ enabled:true });
+
+    try {
+      graph.bindKey && graph.bindKey(['backspace','delete'], () => {
+        if (modeRef.current !== 'edit') return;
+        const cells = graph.getSelectedCells ? graph.getSelectedCells() : [];
+        if (cells.length) graph.removeCells(cells); else if (selRef.current) graph.removeCell(selRef.current);
+        setSel(null);
+      });
+      graph.bindKey && graph.bindKey(['ctrl+z','command+z'], () => { graph.canUndo && graph.canUndo() && graph.undo(); });
+      graph.bindKey && graph.bindKey(['ctrl+shift+z','command+shift+z'], () => { graph.canRedo && graph.canRedo() && graph.redo(); });
+    } catch(e){ console.warn(e); }
+
+    // 选中 / 点击
+    graph.on('node:click', ({ node }) => {
+      if (modeRef.current === 'run'){ runControl(node); return; }
+      selRef.current = node;
+      const d = node.getData() || {};
+      setSel({ id:node.id, kind:d.kind, label:nodeLabel(node), binding:d.binding || '', unit:d.unit || '' });
+    });
+    graph.on('blank:click', () => { selRef.current = null; setSel(null); });
+
+    setReady(true);
+    return () => graph.dispose();
+  }, []);
+
+  const selRef = useRef(null);
+
+  const nodeLabel = (node) => {
+    const k = (node.getData() || {}).kind;
+    return node.attr(labelSelector(k) + '/text') || '';
+  };
+
+  // 拉取数据点 + 工程列表，自动打开最近一个
+  useEffect(() => {
+    if (!ready) return;
+    fetch('api/v1/scada/datapoints').then(r => r.json()).then(d => setDatapoints(Array.isArray(d)?d:[])).catch(()=>{});
+    fetch('api/v1/scada/projects').then(r => r.json()).then(list => {
+      const arr = Array.isArray(list) ? list : [];
+      setProjects(arr);
+      if (arr.length) loadProject(arr[0].id);
+    }).catch(()=>{});
+  }, [ready]);
+
+  const addNode = (kind, x, y) => {
+    const graph = graphRef.current; if (!graph) return;
+    const meta = KIND_META[kind];
+    graph.addNode({ shape:kind, x:Math.round(x), y:Math.round(y), data:{ kind, binding:'', unit:'' } });
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    const kind = e.dataTransfer.getData('kind'); if (!kind) return;
+    const p = graphRef.current.clientToLocal({ x:e.clientX, y:e.clientY });
+    addNode(kind, p.x - 32, p.y - 28);
+  };
+
+  // 属性编辑
+  const updateLabel = (v) => {
+    const node = selRef.current; if (!node) return;
+    node.attr(labelSelector(sel.kind) + '/text', v);
+    setSel(s => ({ ...s, label:v }));
+  };
+  const updateBinding = (v) => {
+    const node = selRef.current; if (!node) return;
+    node.setData({ binding:v });
+    setSel(s => ({ ...s, binding:v }));
+    const dp = datapoints.find(p => p.id === v);
+    if (sel.kind === 'scada-vdisp' && dp){ node.attr('cap/text', dp.label.split(' · ').pop() || '数值'); node.setData({ unit:dp.unit }); setSel(s => ({ ...s, unit:dp.unit, label:node.attr('cap/text') })); }
+  };
+  const deleteSel = () => { const node = selRef.current; if (node){ graphRef.current.removeCell(node); selRef.current=null; setSel(null); } };
+
+  // 运行态控制：点击设备图元 → 启停
+  const runControl = (node) => {
+    const d = node.getData() || {};
+    if (!d.binding) { flash('该图元未绑定数据点'); return; }
+    const dev = d.binding.split('.')[0];
+    const cur = valuesRef.current[dev + '.status'];
+    if (cur === undefined) return;
+    const action = cur === '运行' ? 'stop' : 'start';
+    fetch('api/v1/ba/devices/control', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id:dev, action }) })
+      .then(() => { flash(dev + ' 已' + (action==='start'?'启动':'停止')); pollValues(); })
+      .catch(()=>{});
+  };
+
+  // 运行态取值并应用
+  const pollValues = useCallback(() => {
+    fetch('api/v1/scada/values').then(r => r.json()).then(values => {
+      valuesRef.current = values || {};
+      const graph = graphRef.current; if (!graph) return;
+      const stateById = {};
+      graph.getNodes().forEach(node => {
+        const d = node.getData() || {};
+        if (!d.binding) return;
+        const v = values[d.binding];
+        if (v === undefined) return;
+        if (d.kind === 'scada-vdisp'){ node.attr('val/text', (typeof v==='number'? v : v) + (d.unit ? ' '+d.unit : '')); return; }
+        let st;
+        if (typeof v === 'string') st = v==='故障' ? 'fault' : v==='运行' ? 'run' : 'stop';
+        else st = v > 5 ? 'run' : 'stop';
+        stateById[node.id] = st;
+        paintNode(node, st);
+      });
+      graph.getEdges().forEach(edge => {
+        const sid = edge.getSourceCellId && edge.getSourceCellId();
+        const flow = sid && stateById[sid] === 'run';
+        edge.attr('line/strokeDasharray', flow ? 8 : 0);
+        edge.attr('line/class', flow ? 'pipe-flow' : null);
+        edge.attr('line/stroke', flow ? C.blue : '#9fbbe0');
+      });
+    }).catch(()=>{});
+  }, []);
+
+  // 切换编辑 / 运行
+  const toggleMode = () => {
+    const next = mode === 'edit' ? 'run' : 'edit';
+    modeRef.current = next; setMode(next);
+    selRef.current = null; setSel(null);
+    const graph = graphRef.current;
+    if (next === 'run'){ graph.cleanSelection && graph.cleanSelection(); pollValues(); }
+    else { graph.getNodes().forEach(resetNode); graph.getEdges().forEach(e => { e.attr('line/class', null); e.attr('line/strokeDasharray', 0); e.attr('line/stroke', '#9fbbe0'); }); }
+  };
+  useEffect(() => {
+    if (mode !== 'run') return;
+    const t = setInterval(pollValues, 2000);
+    return () => clearInterval(t);
+  }, [mode, pollValues]);
+
+  // 工程操作
+  const loadProject = (id) => {
+    fetch('api/v1/scada/projects/detail?id=' + id).then(r => r.json()).then(p => {
+      if (!p || !p.id) return;
+      setProjectId(p.id); setProjectName(p.name);
+      const g = p.graph && p.graph.cells ? p.graph : { cells:[] };
+      graphRef.current.fromJSON(g);
+      selRef.current = null; setSel(null);
+    }).catch(()=>{});
+  };
+  const saveProject = () => {
+    const graph = graphRef.current; if (!graph) return;
+    const graphJSON = graph.toJSON();
+    const doSave = (id) => fetch('api/v1/scada/projects/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, name:projectName, graph:graphJSON }) })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(() => { flash('已保存'); refreshList(); }).catch(() => flash('保存失败'));
+    if (projectId) doSave(projectId);
+    else fetch('api/v1/scada/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name:projectName }) })
+      .then(r => r.json()).then(p => { setProjectId(p.id); doSave(p.id); }).catch(() => flash('保存失败'));
+  };
+  const refreshList = () => fetch('api/v1/scada/projects').then(r => r.json()).then(l => setProjects(Array.isArray(l)?l:[])).catch(()=>{});
+  // 下发到大屏（中台→渲染端的契约）：先存盘再标记发布
+  const publishProject = () => {
+    const graph = graphRef.current; if (!graph) return;
+    const graphJSON = graph.toJSON();
+    const publish = (id) => fetch('api/v1/scada/publish', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }) })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(() => flash('已下发到大屏 · 二维组态视图')).catch(() => flash('下发失败'));
+    const save = (id) => fetch('api/v1/scada/projects/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, name:projectName, graph:graphJSON }) })
+      .then(() => { refreshList(); publish(id); });
+    if (projectId) save(projectId);
+    else fetch('api/v1/scada/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name:projectName }) })
+      .then(r => r.json()).then(p => { setProjectId(p.id); save(p.id); }).catch(() => flash('下发失败'));
+  };
+  const createProject = () => {
+    const name = newName.trim() || '未命名组态';
+    fetch('api/v1/scada/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name }) })
+      .then(r => r.json()).then(p => { setProjectId(p.id); setProjectName(p.name); graphRef.current.fromJSON({ cells:[] }); setSel(null); setDlg(null); setNewName(''); refreshList(); flash('已新建'); }).catch(()=>{});
+  };
+  const delProject = (id) => {
+    fetch('api/v1/scada/projects/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }) })
+      .then(() => { refreshList(); if (id === projectId){ setProjectId(null); setProjectName('未命名组态'); graphRef.current.fromJSON({cells:[]}); } }).catch(()=>{});
+  };
+
+  const undo = () => { const g = graphRef.current; g.canUndo && g.canUndo() && g.undo(); };
+  const redo = () => { const g = graphRef.current; g.canRedo && g.canRedo() && g.redo(); };
+
+  // 绑定下拉的可选点（按图元类型过滤）
+  const bindOptions = sel ? datapoints.filter(p => {
+    const want = KIND_META[sel.kind].bind;
+    if (want === 'number') return p.kind === 'number';
+    if (want === 'status') return p.kind === 'status';
+    return false;
+  }) : [];
+
+  return (
+    <div className="w-screen h-screen flex flex-col">
+      {/* 顶部工具栏 */}
+      <div className="glass flex items-center gap-2 px-4 h-[52px] shrink-0 z-10" style={{ borderLeft:0, borderRight:0, borderTop:0 }}>
+        <a href="./" className="btn">⟵ 大屏</a>
+        <span className="mx-1 font-bold text-[15px] tracking-wide" style={{ color:'var(--cyan)' }}>组态编辑器</span>
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background:'rgba(239,131,38,.16)', color:'var(--orange)' }}>中台配置 · MOCK</span>
+        <input className="fld num" style={{ width:180 }} value={projectName} onChange={e => setProjectName(e.target.value)} title="工程名称" />
+        <div className="w-px h-6 mx-1" style={{ background:'var(--line)' }}></div>
+        <button className="btn" onClick={() => setDlg('new')}>＋ 新建</button>
+        <button className="btn" onClick={() => { refreshList(); setDlg('open'); }}>📂 打开</button>
+        <button className="btn" onClick={saveProject}>💾 保存</button>
+        <button className="btn primary" onClick={publishProject}>📡 下发到大屏</button>
+        <div className="w-px h-6 mx-1" style={{ background:'var(--line)' }}></div>
+        <button className="btn" onClick={undo} disabled={mode==='run'}>↶ 撤销</button>
+        <button className="btn" onClick={redo} disabled={mode==='run'}>↷ 重做</button>
+        <button className="btn" onClick={deleteSel} disabled={mode==='run' || !sel}>🗑 删除</button>
+        <div className="flex-1"></div>
+        <button className={'btn ' + (mode==='run' ? 'on' : 'primary')} onClick={toggleMode}>
+          {mode==='run' ? '■ 停止运行' : '▶ 运行'}
+        </button>
+      </div>
+
+      {/* 主体三栏 */}
+      <div className="flex-1 flex min-h-0">
+        {/* 左：图元面板 */}
+        <div className="glass w-[150px] shrink-0 p-3 overflow-y-auto scrollbar" style={{ borderTop:0, borderBottom:0, borderLeft:0 }}>
+          <div className="text-[12px] font-bold mb-2.5" style={{ color:'var(--txt-dim)' }}>图元库 ELEMENTS</div>
+          <div className="grid grid-cols-2 gap-2">
+            {PALETTE.map(p => (
+              <div key={p.kind} className="palette-item" draggable
+                onDragStart={e => e.dataTransfer.setData('kind', p.kind)}>
+                <span className="text-[20px] leading-none" style={{ color:'var(--blue)' }}>{p.icon}</span>
+                <span className="text-[11px]">{p.name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-[11px] mt-4 leading-relaxed" style={{ color:'var(--txt-dim)' }}>
+            拖拽图元到画布。<br/>从图元端口拉出连线即为管道。<br/>右键拖动平移，Ctrl+滚轮缩放。
+          </div>
+        </div>
+
+        {/* 中：画布 */}
+        <div className={'paper-wrap flex-1 min-w-0 relative ' + (mode==='run' ? 'run' : '')}
+          onDrop={onDrop} onDragOver={e => e.preventDefault()}>
+          <div id="paper" ref={paperRef}></div>
+          {mode==='run' && (
+            <div className="absolute top-3 left-3 glass px-3 py-1.5 rounded-md text-[12px] flex items-center gap-2" style={{ color:'var(--green)' }}>
+              <span className="w-2 h-2 rounded-full" style={{ background:'var(--green)', boxShadow:'0 0 6px var(--green)' }}></span>
+              运行中 · 实时数据每 2 秒刷新 · 点击设备可启停
+            </div>
+          )}
+        </div>
+
+        {/* 右：属性面板 */}
+        <div className="glass w-[290px] shrink-0 p-4 overflow-y-auto scrollbar" style={{ borderTop:0, borderBottom:0, borderRight:0 }}>
+          <div className="text-[12px] font-bold mb-3" style={{ color:'var(--txt-dim)' }}>属性 PROPERTIES</div>
+          {!sel && <div className="text-[13px] mt-6 text-center" style={{ color:'var(--txt-dim)' }}>{mode==='run' ? '运行态：点击设备可启停' : '选中画布中的图元以编辑属性'}</div>}
+          {sel && (
+            <div className="space-y-3.5">
+              <div>
+                <span className="lbl">图元类型</span>
+                <div className="text-[13px] font-medium">{KIND_META[sel.kind].name}</div>
+              </div>
+              <div>
+                <span className="lbl">{sel.kind==='scada-vdisp' ? '标题' : '名称'}</span>
+                <input className="fld" value={sel.label} onChange={e => updateLabel(e.target.value)} />
+              </div>
+              {KIND_META[sel.kind].bind !== 'none' && (
+                <div>
+                  <span className="lbl">绑定数据点</span>
+                  <select className="fld" value={sel.binding} onChange={e => updateBinding(e.target.value)}>
+                    <option value="">（未绑定）</option>
+                    {Object.entries(groupByDevice(bindOptions)).map(([dev, pts]) => (
+                      <optgroup key={dev} label={pts[0].label.split(' · ')[0]}>
+                        {pts.map(p => <option key={p.id} value={p.id}>{p.label.split(' · ').pop()}{p.unit?` (${p.unit})`:''}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {sel.binding && <div className="text-[11px] mt-1 num" style={{ color:'var(--cyan)' }}>{sel.binding}</div>}
+                </div>
+              )}
+              {sel.kind==='scada-vdisp' && (
+                <div><span className="lbl">单位</span><input className="fld" value={sel.unit} onChange={e => { selRef.current.setData({unit:e.target.value}); setSel(s=>({...s,unit:e.target.value})); }} /></div>
+              )}
+              <button className="btn w-full justify-center" style={{ color:'var(--red)', borderColor:'rgba(226,69,80,.4)' }} onClick={deleteSel}>🗑 删除此图元</button>
+            </div>
+          )}
+          <div className="mt-6 pt-3 text-[11px] leading-relaxed" style={{ borderTop:'1px solid var(--line)', color:'var(--txt-dim)' }}>
+            绑定后切到「运行」，图元按实时数据变色 / 转动，管道显示流动，点击设备可下发启停。
+          </div>
+        </div>
+      </div>
+
+      {/* 打开 / 新建弹窗 */}
+      {dlg==='new' && (
+        <div className="modal-mask" onClick={() => setDlg(null)}>
+          <div className="glass rounded-xl p-5 w-[360px]" onClick={e => e.stopPropagation()}>
+            <div className="font-bold mb-3">新建组态工程</div>
+            <input className="fld" autoFocus placeholder="输入工程名称，如：冷热源机房" value={newName}
+              onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key==='Enter' && createProject()} />
+            <div className="flex justify-end gap-2 mt-4">
+              <button className="btn" onClick={() => setDlg(null)}>取消</button>
+              <button className="btn primary" onClick={createProject}>创建</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {dlg==='open' && (
+        <div className="modal-mask" onClick={() => setDlg(null)}>
+          <div className="glass rounded-xl p-5 w-[440px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="font-bold mb-3">打开组态工程</div>
+            <div className="flex-1 overflow-y-auto scrollbar space-y-2">
+              {projects.length===0 && <div className="text-[13px] text-center py-6" style={{ color:'var(--txt-dim)' }}>暂无工程，点「新建」创建</div>}
+              {projects.map(p => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ background:'rgba(255,255,255,.5)' }}>
+                  <span className="flex-1 text-[13px] font-medium cursor-pointer" onClick={() => { loadProject(p.id); setDlg(null); }}>{p.name}</span>
+                  <span className="text-[11px] num" style={{ color:'var(--txt-dim)' }}>#{p.id}</span>
+                  <button className="btn" style={{ padding:'2px 8px', color:'var(--red)' }} onClick={() => delProject(p.id)}>删除</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end mt-4"><button className="btn" onClick={() => setDlg(null)}>关闭</button></div>
+          </div>
+        </div>
+      )}
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+function groupByDevice(points){
+  const m = {};
+  points.forEach(p => { (m[p.device] = m[p.device] || []).push(p); });
+  return m;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

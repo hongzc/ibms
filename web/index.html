@@ -11,6 +11,7 @@
 <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
 <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/@antv/x6@2/dist/index.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -133,6 +134,12 @@
 
   @keyframes ticker{ 0%{ transform:translateX(0);} 100%{ transform:translateX(-50%);} }
   .ticker-track{ display:inline-flex; gap:40px; white-space:nowrap; animation:ticker 34s linear infinite; }
+
+  /* 二维组态只读视图 */
+  .scada-spin{ transform-origin:center; transform-box:fill-box; animation:scadaSpin 1.1s linear infinite; }
+  @keyframes scadaSpin{ to{ transform:rotate(360deg); } }
+  @keyframes pipeFlow{ to{ stroke-dashoffset:-28; } }
+  .pipe-flow{ animation:pipeFlow .7s linear infinite; }
 </style>
 </head>
 <body>
@@ -506,7 +513,8 @@ Object.assign(window, {
    IBMS 大屏 — 小型「全息数字孪生楼栋」引擎（天空蓝）
    createCity3D(container) -> { dispose, setScene, resize }
    ============================================================ */
-function createCity3D(container){
+function createCity3D(container, opts){
+  opts = opts || {};
   const W0 = container.clientWidth || 800;
   const H0 = container.clientHeight || 600;
 
@@ -574,12 +582,12 @@ function createCity3D(container){
     return y + h;
   }
 
-  // 宽裙楼 -> 主体 -> 退台顶层，整体高度 ~140，宽 ~150
+  // 10 层楼：1-2 层裙楼（宽）+ 3-10 层主楼，统一层高
+  const FLOOR_H = 13, FLOORS = 10;
   let y = 0;
-  y = block(150, 34, 110, y, 2);   // 裙楼
-  y = block(96, 70, 78, y, 5);     // 主体
-  y = block(58, 36, 50, y, 3);     // 顶层退台
-  const TOTAL_H = y;
+  y = block(140, 2 * FLOOR_H, 100, y, 2); // 裙楼：1-2 层
+  y = block(92, 8 * FLOOR_H, 74, y, 8);   // 主楼：3-10 层
+  const TOTAL_H = y;                        // ≈ 130
 
   // 顶部小天线 + 信标
   const spireMat = new THREE.MeshBasicMaterial({ color: 0x2b7fff, transparent: true, opacity: 0.9 });
@@ -612,6 +620,52 @@ function createCity3D(container){
   const grid = new THREE.GridHelper(800, 32, 0x4f93cf, 0x84b4e4);
   grid.material.transparent = true; grid.material.opacity = 0.3; grid.material.depthWrite = false;
   root.add(grid);
+
+  /* ---------- 设备标记：数字孪生楼里的可点击设备光点 ---------- */
+  function dotTexture(){
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 1, 32, 32, 30);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(32, 32, 30, 0, Math.PI * 2); x.fill();
+    const t = new THREE.CanvasTexture(c); disposables.push(t); return t;
+  }
+  const DOT = dotTexture();
+  const STATUS_COLOR = { '运行': 0x1fa85f, '停止': 0x9bb3cf, '故障': 0xe24550 };
+  const markers = new THREE.Group(); building.add(markers);
+  const markerList = [];
+  function clearMarkers(){ markerList.forEach((m) => { markers.remove(m); m.material.dispose(); }); markerList.length = 0; }
+  function floorY(zone){
+    if (/地下|B\d/.test(zone || '')) return 5;
+    const m = /(\d+)\s*F/.exec(zone || '');
+    let f = m ? parseInt(m[1], 10) : 3;
+    f = Math.max(1, Math.min(FLOORS, f));
+    return (f - 0.5) * FLOOR_H; // 楼层中心高度
+  }
+  function blockHalf(y){ return y < 2 * FLOOR_H ? [70, 50] : [46, 37]; }
+  function setDevices(list){
+    clearMarkers();
+    (list || []).forEach((d, i) => {
+      const y = floorY(d.zone); const h = blockHalf(y); const a = i * 2.39996;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: DOT, color: STATUS_COLOR[d.status] || 0x9bb3cf, transparent: true, depthWrite: false }));
+      sp.position.set(Math.cos(a) * (h[0] + 7), y, Math.sin(a) * (h[1] + 7));
+      sp.scale.set(11, 11, 1); sp.userData = { id: d.id };
+      markers.add(sp); markerList.push(sp);
+    });
+  }
+  function setDeviceStatus(map){ markerList.forEach((sp) => { const s = map[sp.userData.id]; if (s) sp.material.color.set(STATUS_COLOR[s] || 0x9bb3cf); }); }
+
+  const raycaster = new THREE.Raycaster();
+  function pick(ev){
+    const r = renderer.domElement.getBoundingClientRect();
+    const nx = ((ev.clientX - r.left) / r.width) * 2 - 1, ny = -((ev.clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera({ x: nx, y: ny }, camera);
+    return raycaster.intersectObjects(markerList, false);
+  }
+  function onClick(ev){ if (!opts.onPick) return; const hits = pick(ev); if (hits.length) opts.onPick(hits[0].object.userData.id); }
+  function onMove(ev){ renderer.domElement.style.cursor = pick(ev).length ? 'pointer' : 'default'; }
+  renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('pointermove', onMove);
 
   /* ---------- 视角预设（楼栋小，整体可见） ---------- */
   const MID = TOTAL_H * 0.5;
@@ -676,12 +730,15 @@ function createCity3D(container){
   function dispose(){
     alive = false; cancelAnimationFrame(raf);
     ro && ro.disconnect(); window.removeEventListener('resize', resize);
+    renderer.domElement.removeEventListener('click', onClick);
+    renderer.domElement.removeEventListener('pointermove', onMove);
+    clearMarkers();
     disposables.forEach((d) => d && d.dispose && d.dispose());
     renderer.dispose();
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
-  return { dispose, setScene, resize };
+  return { dispose, setScene, resize, setDevices, setDeviceStatus };
 }
 
 window.createCity3D = createCity3D;
@@ -1194,21 +1251,147 @@ function ModuleNav(){
   );
 }
 
+/* ============================================================
+   二维组态：只读展示视图 —— 加载中台「下发」的组态图纸 + 实时刷新
+   （图元注册与 /editor 编辑器保持一致，此处仅渲染不编辑）
+   ============================================================ */
+const SC = { blue:'#2b7fff', cyan:'#0a93c9', green:'#1fa85f', red:'#e24550', gray:'#9bb3cf', txt:'#123c6e' };
+let scadaShapesReady = false;
+function registerScadaShapes(){
+  if (typeof X6 === 'undefined' || scadaShapesReady) return;
+  const G = X6.Graph;
+  const PORTS = { groups:{ g:{ position:'absolute', attrs:{ circle:{ r:0, magnet:false } } } },
+    items:[{id:'t',group:'g',args:{x:'50%',y:0}},{id:'r',group:'g',args:{x:'100%',y:'50%'}},{id:'b',group:'g',args:{x:'50%',y:'100%'}},{id:'l',group:'g',args:{x:0,y:'50%'}}] };
+  G.registerNode('scada-pump', { width:64, height:64, ports:PORTS,
+    markup:[{tagName:'circle',selector:'body'},{tagName:'path',selector:'rotor'},{tagName:'text',selector:'label'}],
+    attrs:{ body:{cx:32,cy:26,r:19,fill:'#eef4ff',stroke:SC.blue,strokeWidth:2}, rotor:{d:'M32,11 L32,41 M17,26 L47,26',stroke:SC.blue,strokeWidth:3,strokeLinecap:'round',fill:'none'}, label:{x:32,y:58,textAnchor:'middle',fontSize:11,fill:SC.txt,text:'水泵'} } }, true);
+  G.registerNode('scada-fan', { width:64, height:64, ports:PORTS,
+    markup:[{tagName:'rect',selector:'body'},{tagName:'path',selector:'rotor'},{tagName:'text',selector:'label'}],
+    attrs:{ body:{x:8,y:6,width:48,height:40,rx:6,fill:'#eef4ff',stroke:SC.blue,strokeWidth:2}, rotor:{d:'M32,10 L32,42 M16,26 L48,26 M21,15 L43,37 M43,15 L21,37',stroke:SC.blue,strokeWidth:2.4,strokeLinecap:'round',fill:'none'}, label:{x:32,y:58,textAnchor:'middle',fontSize:11,fill:SC.txt,text:'风机'} } }, true);
+  G.registerNode('scada-valve', { width:64, height:56, ports:PORTS,
+    markup:[{tagName:'path',selector:'body'},{tagName:'text',selector:'label'}],
+    attrs:{ body:{d:'M10,10 L10,38 L32,24 Z M54,10 L54,38 L32,24 Z',fill:'#eef4ff',stroke:SC.blue,strokeWidth:2,strokeLinejoin:'round'}, label:{x:32,y:52,textAnchor:'middle',fontSize:11,fill:SC.txt,text:'阀门'} } }, true);
+  G.registerNode('scada-chiller', { width:120, height:60, ports:PORTS,
+    markup:[{tagName:'rect',selector:'body'},{tagName:'text',selector:'label'}],
+    attrs:{ body:{x:1,y:1,width:118,height:58,rx:9,fill:'#e7f0ff',stroke:SC.blue,strokeWidth:2}, label:{x:60,y:34,textAnchor:'middle',fontSize:13,fontWeight:700,fill:SC.txt,text:'冷热源机组'} } }, true);
+  G.registerNode('scada-vdisp', { width:104, height:60, ports:PORTS,
+    markup:[{tagName:'rect',selector:'body'},{tagName:'text',selector:'cap'},{tagName:'text',selector:'val'}],
+    attrs:{ body:{x:1,y:1,width:102,height:58,rx:8,fill:'rgba(255,255,255,.85)',stroke:SC.cyan,strokeWidth:1.5}, cap:{x:52,y:17,textAnchor:'middle',fontSize:11,fill:'#5b7ea6',text:'数值'}, val:{x:52,y:42,textAnchor:'middle',fontSize:20,fontFamily:'Oxanium',fontWeight:700,fill:SC.cyan,text:'--'} } }, true);
+  G.registerNode('scada-indicator', { width:44, height:44, ports:PORTS,
+    markup:[{tagName:'circle',selector:'body'},{tagName:'text',selector:'label'}],
+    attrs:{ body:{cx:22,cy:15,r:11,fill:SC.gray,stroke:'#fff',strokeWidth:2}, label:{x:22,y:38,textAnchor:'middle',fontSize:11,fill:SC.txt,text:'状态'} } }, true);
+  G.registerNode('scada-text', { width:96, height:26,
+    markup:[{tagName:'text',selector:'label'}],
+    attrs:{ label:{x:48,y:17,textAnchor:'middle',fontSize:14,fontWeight:500,fill:SC.txt,text:'文本标签'} } }, true);
+  G.registerEdge('scada-pipe', { zIndex:-1, attrs:{ line:{stroke:'#9fbbe0',strokeWidth:6,strokeLinecap:'round',targetMarker:null} } }, true);
+  scadaShapesReady = true;
+}
+function paintScadaNode(node, st){
+  const kind = (node.getData() || {}).kind;
+  const stroke = st==='fault' ? SC.red : st==='run' ? SC.green : SC.gray;
+  const fill   = st==='fault' ? '#fbe4e6' : st==='run' ? '#e3f7ec' : '#eef2f7';
+  if (kind === 'scada-indicator'){ node.attr('body/fill', stroke); return; }
+  node.attr('body/stroke', stroke); node.attr('body/fill', fill);
+  if (kind === 'scada-pump' || kind === 'scada-fan') node.attr('rotor/class', st==='run' ? 'scada-spin' : null);
+}
+function applyScadaValues(graph, values){
+  const stateById = {};
+  graph.getNodes().forEach(node => {
+    const d = node.getData() || {}; if (!d.binding) return;
+    const v = values[d.binding]; if (v === undefined) return;
+    if (d.kind === 'scada-vdisp'){ node.attr('val/text', v + (d.unit ? ' '+d.unit : '')); return; }
+    let st;
+    if (typeof v === 'string') st = v==='故障' ? 'fault' : v==='运行' ? 'run' : 'stop';
+    else st = v > 5 ? 'run' : 'stop';
+    stateById[node.id] = st; paintScadaNode(node, st);
+  });
+  graph.getEdges().forEach(edge => {
+    const sid = edge.getSourceCellId && edge.getSourceCellId();
+    const flow = sid && stateById[sid] === 'run';
+    edge.attr('line/strokeDasharray', flow ? 8 : 0);
+    edge.attr('line/class', flow ? 'pipe-flow' : null);
+    edge.attr('line/stroke', flow ? SC.blue : '#9fbbe0');
+  });
+}
+
+function ScadaView(){
+  const ref = useRef(null), gref = useRef(null);
+  const [state, setState] = useState('loading'); // loading | empty | ok
+  useEffect(() => {
+    if (typeof X6 === 'undefined'){ setState('empty'); return; }
+    registerScadaShapes();
+    const graph = new X6.Graph({ container:ref.current, interacting:false, background:{color:'transparent'},
+      panning:{enabled:true}, mousewheel:{enabled:true, modifiers:['ctrl','meta'], minScale:0.4, maxScale:2} });
+    gref.current = graph;
+    const apply = () => fetch('api/v1/scada/values').then(r => r.json()).then(v => applyScadaValues(graph, v)).catch(()=>{});
+    let timer = null;
+    fetch('api/v1/scada/published').then(r => r.json()).then(p => {
+      if (!p || !p.graph || !p.graph.cells || !p.graph.cells.length){ setState('empty'); return; }
+      graph.fromJSON(p.graph);
+      try { graph.zoomToFit({ padding:48, maxScale:1.1 }); } catch(e){}
+      setState('ok'); apply(); timer = setInterval(apply, 2000);
+    }).catch(() => setState('empty'));
+    return () => { if (timer) clearInterval(timer); graph.dispose(); };
+  }, []);
+  return (
+    <div className="absolute inset-0 z-20" style={{ borderRadius:10, background:'radial-gradient(1200px 700px at 50% 0%, #eaf4ff, #cfe1fa)' }}>
+      <div ref={ref} className="absolute inset-0" style={{ borderRadius:10, overflow:'hidden' }}></div>
+      <div className="absolute top-3 left-3 glass px-3 py-1.5 rounded-md text-[12px] flex items-center gap-2 z-10" style={{ color:'var(--cyan)' }}>
+        <span className="w-2 h-2 rounded-full" style={{ background:'var(--cyan)', boxShadow:'0 0 6px var(--cyan)' }}></span>
+        二维组态 · 中台下发图纸 · 实时刷新
+      </div>
+      {state==='empty' && (
+        <div className="absolute inset-0 flex items-center justify-center text-[14px]" style={{ color:'var(--txt-dim)' }}>
+          尚未下发组态图纸 —— 请在中台「组态编辑器」中「下发到大屏」
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- 主场景：数字孪生楼宇 ---------------- */
 const SCENES = ['全景VR', '二维组态', 'BIM三维', 'GIS地图'];
 
 function MainScene({ overview, d, onToggle }){
   const [scene, setScene] = useState('BIM三维');
+  const [ready, setReady] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [picked, setPicked] = useState(null); // 被点击设备 id
   const mountRef = useRef(null);
   const engineRef = useRef(null);
 
   // 初始化 Three.js 城市
   useEffect(() => {
     if (!mountRef.current || typeof THREE === 'undefined') return;
-    const engine = createCity3D(mountRef.current);
+    const engine = createCity3D(mountRef.current, { onPick: (id) => setPicked(id) });
     engineRef.current = engine;
+    setReady(true);
     return () => { engine.dispose(); engineRef.current = null; };
   }, []);
+
+  // 拉取 BA 设备 → 楼里建光点；轮询刷新状态颜色
+  useEffect(() => {
+    if (!ready) return;
+    const fetchAll = () => Promise.all(['fresh', 'ac', 'chiller'].map(t =>
+      fetch('api/v1/ba/devices?type=' + t).then(r => r.json()).catch(() => ({}))))
+      .then(rs => rs.flatMap(r => (r && r.devices) || []));
+    fetchAll().then(list => { setDevices(list); engineRef.current && engineRef.current.setDevices(list); });
+    const t = setInterval(() => fetchAll().then(list => {
+      setDevices(list);
+      const m = {}; list.forEach(x => { m[x.id] = x.status; });
+      engineRef.current && engineRef.current.setDeviceStatus(m);
+    }), 4000);
+    return () => clearInterval(t);
+  }, [ready]);
+
+  const pickedDev = picked ? devices.find(x => x.id === picked) : null;
+  const controlPicked = (action) => {
+    if (!picked) return;
+    fetch('api/v1/ba/devices/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: picked, action }) })
+      .then(() => Promise.all(['fresh', 'ac', 'chiller'].map(t => fetch('api/v1/ba/devices?type=' + t).then(r => r.json()).catch(() => ({})))))
+      .then(rs => { const list = rs.flatMap(r => (r && r.devices) || []); setDevices(list); const m = {}; list.forEach(x => { m[x.id] = x.status; }); engineRef.current && engineRef.current.setDeviceStatus(m); })
+      .catch(() => {});
+  };
 
   // 切换视角预设
   useEffect(() => {
@@ -1226,6 +1409,9 @@ function MainScene({ overview, d, onToggle }){
     <div className="relative h-full glass overflow-hidden" style={{ borderRadius: 10 }}>
       {/* Three.js 数字孪生画布 */}
       <div ref={mountRef} className="absolute inset-0" style={{ borderRadius: 10, overflow: 'hidden' }}></div>
+
+      {/* 二维组态：只读展示中台下发的组态图纸 */}
+      {scene === '二维组态' ? <ScadaView /> : null}
 
       {/* 赛博叠加层：暗角 + 扫描线 + 扫描光带 */}
       <div className="vignette"></div>
@@ -1264,6 +1450,29 @@ function MainScene({ overview, d, onToggle }){
         style={{ borderRadius: 6, color: overview ? 'var(--magenta)' : 'var(--cyan)' }}>
         {overview ? '▤ 详情面板' : '▤ 概览模式'}
       </button>
+
+      {/* 设备详情面板：点击楼里设备光点弹出 */}
+      {pickedDev ? (
+        <div className="absolute top-14 right-3 z-40 glass flex flex-col" style={{ width: 270, borderRadius: 10 }}>
+          <div className="card-title">
+            <span className="dot" style={{ background: pickedDev.status==='故障' ? 'var(--red)' : pickedDev.status==='运行' ? 'var(--green)' : 'var(--txt-dim)' }}></span>
+            <h3 style={{ fontSize: 14 }}>{pickedDev.name}</h3>
+            <button onClick={() => setPicked(null)} className="ml-auto w-6 h-6 rounded flex items-center justify-center text-[14px] hover:bg-white/10" style={{ color: 'var(--txt-dim)' }}>✕</button>
+          </div>
+          <div className="px-4 py-3 text-[13px] space-y-2">
+            <div className="flex justify-between"><span style={{ color: 'var(--txt-dim)' }}>位置</span><span>{pickedDev.zone}</span></div>
+            <div className="flex justify-between"><span style={{ color: 'var(--txt-dim)' }}>状态</span>
+              <span style={{ color: pickedDev.status==='故障' ? 'var(--red)' : pickedDev.status==='运行' ? 'var(--green)' : 'var(--txt-dim)', fontWeight: 700 }}>{pickedDev.status} · {pickedDev.mode}</span></div>
+            {[['送风/出水温', pickedDev.params.supplyTemp, '℃'], ['回风/回水温', pickedDev.params.returnTemp, '℃'], ['湿度', pickedDev.params.humidity, '%'], ['阀门开度', pickedDev.params.valve, '%'], ['风机频率', pickedDev.params.fanFreq, 'Hz'], ['运行功率', pickedDev.params.power, 'kW']].map(([k, v, u]) => (
+              <div key={k} className="flex justify-between"><span style={{ color: 'var(--txt-dim)' }}>{k}</span><span className="num" style={{ color: 'var(--cyan)' }}>{v}<span className="text-[11px] ml-0.5" style={{ color: 'var(--txt-dim)' }}>{u}</span></span></div>
+            ))}
+            <div className="flex gap-2 pt-1.5">
+              <button onClick={() => controlPicked('start')} disabled={pickedDev.status==='故障'} className="flex-1 py-1.5 rounded text-[12px] font-medium text-white" style={{ background: 'linear-gradient(135deg,#1fa85f,#0a93c9)', opacity: pickedDev.status==='故障' ? .4 : 1 }}>▶ 启动</button>
+              <button onClick={() => controlPicked('stop')} disabled={pickedDev.status==='故障'} className="flex-1 py-1.5 rounded text-[12px] font-medium" style={{ border: '1px solid var(--line)', color: 'var(--txt)', opacity: pickedDev.status==='故障' ? .4 : 1 }}>■ 停止</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* 底部场景切换 */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 glass px-2 py-1.5 z-30" style={{ borderRadius: 10 }}>

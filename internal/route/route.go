@@ -29,6 +29,7 @@ func New(svc *service.Service) *gin.Engine {
 	r.GET("/energy", page("energy.html"))
 	r.GET("/operation", page("operation.html"))
 	r.GET("/workorder", page("workorder.html"))
+	r.GET("/editor", page("editor.html"))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -40,6 +41,7 @@ func New(svc *service.Service) *gin.Engine {
 	en := &energyHandler{svc: svc.Energy}
 	op := &operationHandler{svc: svc.Operation}
 	wo := &workorderHandler{svc: svc.Workorder}
+	sc := &scadaHandler{svc: svc.Scada}
 	api := r.Group("/api/v1")
 	{
 		api.POST("/users", h.create)
@@ -69,6 +71,16 @@ func New(svc *service.Service) *gin.Engine {
 		api.POST("/workorders", wo.create)
 		api.POST("/workorders/dispatch", wo.dispatch)
 		api.POST("/workorders/complete", wo.complete)
+
+		api.GET("/scada/projects", sc.list)
+		api.GET("/scada/projects/detail", sc.detail)
+		api.POST("/scada/projects", sc.create)
+		api.POST("/scada/projects/save", sc.save)
+		api.POST("/scada/projects/delete", sc.delete)
+		api.POST("/scada/publish", sc.publish)
+		api.GET("/scada/published", sc.published)
+		api.GET("/scada/datapoints", sc.datapoints)
+		api.GET("/scada/values", sc.values)
 	}
 
 	return r

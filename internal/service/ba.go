@@ -260,6 +260,15 @@ func (s *BAService) ControlAll(typ, action string) (int, error) {
 	return n, nil
 }
 
+// List 返回全部设备快照（不抖动），供组态点表枚举。
+func (s *BAService) List() []BADevice {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]BADevice, len(s.devices))
+	copy(out, s.devices)
+	return out
+}
+
 // Events 返回某类型设备的运行事件（新事件在前）。
 func (s *BAService) Events(typ string) []BAEvent {
 	s.mu.Lock()

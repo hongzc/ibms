@@ -10,16 +10,19 @@ type Service struct {
 	Energy    *EnergyService
 	Operation *OperationService
 	Workorder *WorkorderService
+	Scada     *ScadaService
 }
 
 // New 基于 Store 构建 Service。
 func New(s *store.Store) *Service {
+	ba := NewBAService()
 	return &Service{
 		User:      &UserService{users: s.User},
 		Dashboard: NewDashboardService(),
-		BA:        NewBAService(),
+		BA:        ba,
 		Energy:    NewEnergyService(),
 		Operation: NewOperationService(),
 		Workorder: NewWorkorderService(),
+		Scada:     NewScadaService(s.Scada, ba),
 	}
 }
