@@ -182,6 +182,47 @@ const KIND_META = Object.fromEntries(PALETTE.map(p => [p.kind, p]));
 const labelSelector = (kind) => kind === 'scada-vdisp' ? 'cap' : 'label';
 
 /* ============================================================
+   组态中立格式（与渲染库无关的交接契约）：
+   { version, nodes:[{id,type,x,y,label,binding,unit}], edges:[{from,to}] }
+   中台据此自建编辑器即可，技术不限。详见 docs/scada-format.md
+   ============================================================ */
+const TYPE_OF = (shape) => shape.replace(/^scada-/, '');
+// X6 toJSON → 中立格式（保存/下发用）
+function x6ToNeutral(graph){
+  const j = graph.toJSON(); const nodes = [], edges = [];
+  (j.cells || []).forEach(c => {
+    if (c.shape === 'scada-pipe'){
+      if (c.source && c.source.cell && c.target && c.target.cell)
+        edges.push({ id:c.id, from:c.source.cell, to:c.target.cell, fromPort:c.source.port, toPort:c.target.port });
+    } else if (c.shape && c.shape.indexOf('scada-') === 0){
+      const type = TYPE_OF(c.shape); const sel = type === 'vdisp' ? 'cap' : 'label';
+      const d = c.data || {};
+      nodes.push({ id:c.id, type, x:Math.round((c.position||{}).x||0), y:Math.round((c.position||{}).y||0),
+        label:(c.attrs && c.attrs[sel] && c.attrs[sel].text) || '', binding:d.binding||'', unit:d.unit||'' });
+    }
+  });
+  return { version:1, nodes, edges };
+}
+// 中立格式 / 旧 X6 格式 → X6 cells（加载/渲染用，兼容历史工程）
+function toX6Cells(graph){
+  if (!graph) return [];
+  if (Array.isArray(graph.cells)) return graph.cells; // 旧 X6 工程直接透传
+  if (!Array.isArray(graph.nodes)) return [];
+  const cells = [];
+  graph.nodes.forEach(n => {
+    const shape = 'scada-' + n.type; const sel = n.type === 'vdisp' ? 'cap' : 'label';
+    const attrs = {}; attrs[sel] = { text: n.label || '' };
+    cells.push({ shape, id:n.id, position:{ x:n.x||0, y:n.y||0 }, attrs, data:{ kind:shape, binding:n.binding||'', unit:n.unit||'' } });
+  });
+  (graph.edges || []).forEach((e, i) => {
+    cells.push({ shape:'scada-pipe', id:e.id || ('e'+i),
+      source: e.fromPort ? { cell:e.from, port:e.fromPort } : { cell:e.from },
+      target: e.toPort ? { cell:e.to, port:e.toPort } : { cell:e.to } });
+  });
+  return cells;
+}
+
+/* ============================================================
    运行态视觉应用
    ============================================================ */
 function paintNode(node, st){
@@ -388,14 +429,13 @@ function App(){
     fetch('api/v1/scada/projects/detail?id=' + id).then(r => r.json()).then(p => {
       if (!p || !p.id) return;
       setProjectId(p.id); setProjectName(p.name);
-      const g = p.graph && p.graph.cells ? p.graph : { cells:[] };
-      graphRef.current.fromJSON(g);
+      graphRef.current.fromJSON({ cells: toX6Cells(p.graph) });
       selRef.current = null; setSel(null);
     }).catch(()=>{});
   };
   const saveProject = () => {
     const graph = graphRef.current; if (!graph) return;
-    const graphJSON = graph.toJSON();
+    const graphJSON = x6ToNeutral(graph);
     const doSave = (id) => fetch('api/v1/scada/projects/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, name:projectName, graph:graphJSON }) })
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(() => { flash('已保存'); refreshList(); }).catch(() => flash('保存失败'));
@@ -407,7 +447,7 @@ function App(){
   // 下发到大屏（中台→渲染端的契约）：先存盘再标记发布
   const publishProject = () => {
     const graph = graphRef.current; if (!graph) return;
-    const graphJSON = graph.toJSON();
+    const graphJSON = x6ToNeutral(graph);
     const publish = (id) => fetch('api/v1/scada/publish', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }) })
       .then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(() => flash('已下发到大屏 · 二维组态视图')).catch(() => flash('下发失败'));
     const save = (id) => fetch('api/v1/scada/projects/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id, name:projectName, graph:graphJSON }) })

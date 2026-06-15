@@ -1215,6 +1215,12 @@ function TopBar({ d, now, onOpen, alarmCount, msgCount }){
 
       {/* 右：入口 */}
       <div className="flex items-center gap-2.5 w-[420px] justify-end">
+        <a href="editor" title="中台组态编辑器（配置侧）"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md transition hover:bg-white/5"
+          style={{ border: '1px solid rgba(43,127,255,.3)' }}>
+          <span className="text-[15px]" style={{ filter: 'drop-shadow(0 0 4px #2b7fff)' }}>⚙</span>
+          <span className="text-[13px]" style={{ color: 'var(--txt)' }}>组态后台</span>
+        </a>
         <Entry icon="✉" label="消息中心" badge={msgCount} color="#0a93c9" onClick={() => onOpen('msg')} />
         <Entry icon="⚠" label="报警中心" badge={alarmCount} color="#ef8326" onClick={() => onOpen('alarm')} />
         <button className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full transition hover:bg-white/5" style={{ border: '1px solid rgba(43,127,255,.3)' }}>
@@ -1286,6 +1292,24 @@ function registerScadaShapes(){
   G.registerEdge('scada-pipe', { zIndex:-1, attrs:{ line:{stroke:'#9fbbe0',strokeWidth:6,strokeLinecap:'round',targetMarker:null} } }, true);
   scadaShapesReady = true;
 }
+// 组态中立格式 / 旧 X6 格式 → X6 cells（详见 docs/scada-format.md）
+function toX6Cells(graph){
+  if (!graph) return [];
+  if (Array.isArray(graph.cells)) return graph.cells;
+  if (!Array.isArray(graph.nodes)) return [];
+  const cells = [];
+  graph.nodes.forEach(n => {
+    const shape = 'scada-' + n.type; const sel = n.type === 'vdisp' ? 'cap' : 'label';
+    const attrs = {}; attrs[sel] = { text: n.label || '' };
+    cells.push({ shape, id:n.id, position:{ x:n.x||0, y:n.y||0 }, attrs, data:{ kind:shape, binding:n.binding||'', unit:n.unit||'' } });
+  });
+  (graph.edges || []).forEach((e, i) => {
+    cells.push({ shape:'scada-pipe', id:e.id || ('e'+i),
+      source: e.fromPort ? { cell:e.from, port:e.fromPort } : { cell:e.from },
+      target: e.toPort ? { cell:e.to, port:e.toPort } : { cell:e.to } });
+  });
+  return cells;
+}
 function paintScadaNode(node, st){
   const kind = (node.getData() || {}).kind;
   const stroke = st==='fault' ? SC.red : st==='run' ? SC.green : SC.gray;
@@ -1326,8 +1350,9 @@ function ScadaView(){
     const apply = () => fetch('api/v1/scada/values').then(r => r.json()).then(v => applyScadaValues(graph, v)).catch(()=>{});
     let timer = null;
     fetch('api/v1/scada/published').then(r => r.json()).then(p => {
-      if (!p || !p.graph || !p.graph.cells || !p.graph.cells.length){ setState('empty'); return; }
-      graph.fromJSON(p.graph);
+      const cells = toX6Cells(p && p.graph);
+      if (!cells.length){ setState('empty'); return; }
+      graph.fromJSON({ cells });
       try { graph.zoomToFit({ padding:48, maxScale:1.1 }); } catch(e){}
       setState('ok'); apply(); timer = setInterval(apply, 2000);
     }).catch(() => setState('empty'));
